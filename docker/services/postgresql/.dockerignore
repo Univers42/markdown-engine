@@ -1,5 +1,0 @@
-*.md
-*.log
-.git
-.env
-node_modules

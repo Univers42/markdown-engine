@@ -18,9 +18,9 @@ const esbuild = require("esbuild");
 
 const MARKENGINE_ROOT = resolve(__dirname, "..");
 
-function loadIndex() {
+function loadIndex(entry = "index.ts") {
   const bundle = esbuild.buildSync({
-    entryPoints: [join(MARKENGINE_ROOT, "index.ts")],
+    entryPoints: [join(MARKENGINE_ROOT, entry)],
     bundle: true,
     platform: "node",
     format: "cjs",
@@ -75,6 +75,9 @@ test("root index exposes the unified MarkEngine API", () => {
   });
   assert.equal(legacyResult.ast.version, 42);
 
-  assert.equal(typeof markengine.InlineDocument.fromSource("text").toSource(), "string");
+  // InlineDocument lives on the ./inline entry point now; the root barrel keeps
+  // only the parse/render core (no React, no DOM).
+  const inline = loadIndex("inline.ts");
+  assert.equal(typeof inline.InlineDocument.fromSource("text").toSource(), "string");
   assert.equal(typeof markengine.MarkEngineWorker, "function");
 });

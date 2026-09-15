@@ -12,8 +12,17 @@
 
 const { execFileSync } = require("node:child_process");
 
+// Public entry points. Every export here is a re-export for CONSUMERS, so
+// ts-prune correctly sees no in-repo use — that is the point of a facade.
+// Keep in sync with the "exports" map in package.json.
 const allowedPublicFacadeFiles = new Set([
   "index.ts",
+  "blocks.ts",
+  "inline.ts",
+  "dom.ts",
+  "react.tsx",
+  "terminal.ts",
+  "shortcuts.ts",
   "markdown.ts",
   "markdown/index.ts",
   "markdown/parserBlockHelpers.ts",

@@ -2,9 +2,9 @@
 
 const test = require("node:test");
 const assert = require("node:assert");
-const { loadMarkengine } = require("./support/loadMarkengine.cjs");
+const { loadMarkengineAll } = require("./support/loadMarkengine.cjs");
 
-const E = loadMarkengine();
+const E = loadMarkengineAll();
 const types = (src) => E.parseInline(src).map((node) => node.type);
 
 test("emphasis variants parse to typed inline nodes", () => {

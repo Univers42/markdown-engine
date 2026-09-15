@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Framework-agnostic Markdown engine: AST parser (block + inline), incremental reparse, and HTML/React/terminal renderers. Declares its own block contract so it never imports a host app. Consumed as TS source through a vite/tsconfig alias, not from node_modules.",
-  "//type": "Deliberately NO \"type\": \"module\" — tests/markengine.test.js is plain CommonJS .js, and declaring ESM here would silently break `npm run test:unit`.",
+  "//type": "Deliberately NO \"type\": \"module\" \u2014 tests/markengine.test.js is plain CommonJS .js, and declaring ESM here would silently break `npm run test:unit`.",
   "exports": {
     ".": "./index.ts",
     "./blocks": "./blocks.ts",
@@ -18,14 +18,18 @@
     "react-dom": "^19.0.0"
   },
   "peerDependenciesMeta": {
-    "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "react": {
+      "optional": true
+    },
+    "react-dom": {
+      "optional": true
+    }
   },
   "scripts": {
     "build:engine": "tsc -p tsconfig.json --outDir dist --module commonjs --moduleResolution node10 --ignoreDeprecations 5.0 --declaration false --target ES2022",
     "build": "npm run build:engine && vite build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test:unit": "cd ../.. && node --test packages/markdown-engine/tests/*.test.js packages/markdown-engine/tests/*.test.cjs",
+    "test:unit": "node --test tests/*.test.js tests/*.test.cjs",
     "test": "npm run build:engine && npm run test:unit",
     "check": "npm run typecheck && npm run quality && npm test && npm run coverage:parsers",
     "quality": "npm run quality:escape-hatches && npm run quality:unused-exports && npm run quality:circular-deps",

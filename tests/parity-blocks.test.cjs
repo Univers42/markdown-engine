@@ -2,9 +2,9 @@
 
 const test = require("node:test");
 const assert = require("node:assert");
-const { loadMarkengine } = require("./support/loadMarkengine.cjs");
+const { loadMarkengineAll } = require("./support/loadMarkengine.cjs");
 
-const E = loadMarkengine();
+const E = loadMarkengineAll();
 const first = (src) => E.parse(src)[0];
 
 test("nested unordered lists preserve every indent level", () => {

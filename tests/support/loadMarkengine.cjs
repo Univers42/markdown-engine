@@ -8,9 +8,9 @@ const esbuild = require("esbuild");
 
 const MARKENGINE_ROOT = resolve(__dirname, "..", "..");
 
-function loadMarkengine() {
+function loadMarkengine(entry = "index.ts") {
   const bundle = esbuild.buildSync({
-    entryPoints: [join(MARKENGINE_ROOT, "index.ts")],
+    entryPoints: [join(MARKENGINE_ROOT, entry)],
     bundle: true,
     platform: "node",
     format: "cjs",
@@ -44,4 +44,19 @@ function loadMarkengine() {
   return module.exports;
 }
 
-module.exports = { loadMarkengine };
+/**
+ * The whole public surface merged into one object.
+ *
+ * The engine deliberately splits its entry points (the root barrel stays
+ * React-free and DOM-free so a plain node runner can load it). Fuzz and parity
+ * suites care about "no input makes anything throw", not about which subpath a
+ * symbol lives on — so they take the union. The per-subpath CONTRACT is asserted
+ * in markengine-index.test.cjs instead.
+ */
+function loadMarkengineAll() {
+  const entries = ["index.ts", "blocks.ts", "inline.ts", "dom.ts", "terminal.ts"];
+  return Object.assign({}, ...entries.map((entry) => loadMarkengine(entry)));
+}
+
+module.exports = { loadMarkengine, loadMarkengineAll };
+

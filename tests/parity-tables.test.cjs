@@ -2,9 +2,9 @@
 
 const test = require("node:test");
 const assert = require("node:assert");
-const { loadMarkengine } = require("./support/loadMarkengine.cjs");
+const { loadMarkengineAll } = require("./support/loadMarkengine.cjs");
 
-const E = loadMarkengine();
+const E = loadMarkengineAll();
 const first = (src) => E.parse(src)[0];
 const tableFor = (sep) => first(`| a | b |\n${sep}\n| 1 | 2 |`);
 

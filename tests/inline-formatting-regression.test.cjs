@@ -19,14 +19,18 @@ const Node = {
   ELEMENT_NODE: 1,
 };
 
+// Anchored to the repo root, not the process cwd: a test that only passes when
+// invoked from one directory is a trap for the next runner.
+const ENGINE_ROOT = require("node:path").resolve(__dirname, "..");
+
 function loadModule(entryPoint) {
   const bundle = esbuild.buildSync({
-    entryPoints: [entryPoint],
+    entryPoints: [require("node:path").join(ENGINE_ROOT, entryPoint)],
     bundle: true,
     platform: "node",
     format: "cjs",
     write: false,
-    tsconfig: "tsconfig.json",
+    tsconfig: require("node:path").join(ENGINE_ROOT, "tsconfig.json"),
   });
 
   const module = { exports: {} };
@@ -46,22 +50,22 @@ function loadModule(entryPoint) {
 }
 
 const { applyInlineFormatting } = loadModule(
-  "src/shared/lib/markengine/inlineFormatting.ts",
+  "inlineFormatting.ts",
 );
 const { applyInlineTextEdit } = loadModule(
-  "src/shared/lib/markengine/inlineTextEditing.ts",
+  "inlineTextEditing.ts",
 );
 const { InlineDocument } = loadModule(
-  "src/shared/lib/markengine/inlineDocument.ts",
+  "inlineDocument.ts",
 );
 const { parseInlineMarkdown } = loadModule(
-  "src/shared/lib/markengine/shortcuts.ts",
+  "shortcuts.ts",
 );
 const { readInlineEditorDomState } = loadModule(
-  "src/shared/lib/markengine/inlineEditorDom.ts",
+  "inlineEditorDom.ts",
 );
 const { autoformatInlineMarkdown } = loadModule(
-  "src/shared/lib/markengine/inlineAutoformat.ts",
+  "inlineAutoformat.ts",
 );
 
 function createSelection(start, end) {

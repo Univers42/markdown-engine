@@ -1,11 +1,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "baseUrl": "../../../..",
-    "jsx": "react-jsx",
-    "paths": {
-      "@/*": ["src/*"]
-    }
+    "jsx": "react-jsx"
   },
   "include": [
     "*.ts",
@@ -18,5 +14,12 @@
     "shortcutsDetect.ts",
     "src/**/*.ts"
   ],
-  "exclude": ["bench", "coverage", "dist", "node_modules", "scripts", "tests"]
+  "exclude": [
+    "bench",
+    "coverage",
+    "dist",
+    "node_modules",
+    "scripts",
+    "tests"
+  ]
 }

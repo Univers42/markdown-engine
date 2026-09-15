@@ -31,7 +31,10 @@ function repoRoot() {
 }
 
 function listFilesAtRef(ref, root, relPath) {
-  const output = git(["ls-tree", "-r", "--name-only", ref, "--", relPath], root);
+  // relPath is "" when the engine IS the repository root (standalone repo) —
+  // git rejects an empty pathspec, so ask for the whole tree instead.
+  const pathspec = relPath === "" ? "." : relPath;
+  const output = git(["ls-tree", "-r", "--name-only", ref, "--", pathspec], root);
   return output.split("\n").filter(Boolean);
 }
 
@@ -41,7 +44,7 @@ function materializeRef(ref) {
   const files = listFilesAtRef(ref, root, relPath);
   if (files.length === 0) {
     throw new Error(
-      `reference ref "${ref}" has no files under ${relPath} — is it a valid, reachable commit?`,
+      `reference ref "${ref}" has no files under ${relPath || "."} — is it a valid, reachable commit?`,
     );
   }
 

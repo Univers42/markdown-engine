@@ -1,6 +1,7 @@
 # Markdown Engine
 
-A compact Markdown engine built around a canonical `src/` implementation.
+`@osionos/markdown-engine` — a compact Markdown engine built around a canonical `src/`
+implementation.
 
 ## What it provides
 
@@ -8,6 +9,49 @@ A compact Markdown engine built around a canonical `src/` implementation.
 - Semantic HTML rendering
 - Incremental reparsing from line-range patches
 - Diagnostics for malformed or out-of-bounds input
+
+## Boundary contract
+
+**The engine never imports a host application.** It declares its own block vocabulary in
+[blockContract.ts](blockContract.ts) (`MarkEngineBlock` / `MarkEngineBlockType`) and its own
+table-layout rules in [tableConfig.ts](tableConfig.ts). A host adapts to the engine, not the
+reverse — which is what makes it reusable across apps.
+
+`MarkEngineBlock` carries a `[key: string]: unknown` index signature, so a host with a richer
+block model stays structurally compatible without a cast. Hosts are expected to add one
+compile-time guard asserting `MarkEngineBlockType extends <their BlockType>`; then adding a block
+type here that the host does not know fails that single file instead of thirty call sites.
+
+Consuming apps enforce the boundary with two gates on their side:
+
+- a `tsc` project that clears `paths`, so any `@/…` import is a hard resolution error;
+- a lexical check for host-package imports, `../../../` escapes, and `react` outside the React
+  entry point (a real package still resolves, so `tsc` alone cannot catch it).
+
+## Entry points
+
+The root entry point is **React-free and DOM-free**. That is load-bearing, not cosmetic: it must
+stay loadable by `node --test --experimental-strip-types`.
+
+| Subpath | Contents | Needs |
+|---|---|---|
+| `.` | AST types, `parse`/`parseInline`, `renderHtml`, `parseInlineMarkdown`, render modes, worker clients, URL sugar | — |
+| `./blocks` | `detectBlockType`, `BLOCK_SHORTCUTS`, `parseMarkdownToBlocks`, the block contract | — |
+| `./inline` | inline formatting, text edits, autoformat, inline document, colour tokens | — |
+| `./dom` | `contentEditable` selection/DOM helpers | `lib.dom` |
+| `./react` | `MarkdownView`, `renderReact`, `renderInlineToReact` | `react` (peer) |
+| `./tables` | table normalization and config | — |
+| `./terminal` | ANSI renderer, callout icons | — |
+
+## Consumed as source
+
+There is no build step for consumers: `exports` points at TypeScript source, resolved through the
+host's bundler/compiler alias rather than `node_modules`. `npm run build:engine` exists only for
+this repo's own tests, coverage and benchmarks.
+
+> `tsconfig.json` deliberately covers only the pure core (`lib: ["ES2022"]`, no DOM) — it is the
+> standing proof that the parser/renderer half needs neither a DOM nor React. The `./dom` and
+> `./react` entry points are type-checked by the consuming app instead.
 
 ## Public API
 

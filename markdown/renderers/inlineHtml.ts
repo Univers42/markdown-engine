@@ -59,7 +59,7 @@ function renderChildren(nodes: InlineNode[], options: ResolvedInlineHtmlOptions)
 function renderCodeRich(node: Extract<InlineNode, { type: "code_rich" }>, options: ResolvedInlineHtmlOptions): string {
   const { nodes: codeChildren, textColor, backgroundColor } = unwrapCodeRichStyles(node.children);
   const style = getInlineCodeCss(textColor, backgroundColor);
-  return `<code class="inline-code" data-inline-type="code" style="${style}">${renderChildren(codeChildren, options)}</code>`;
+  return `<code class="inline-code" data-inline-type="code" style="${esc(style)}">${renderChildren(codeChildren, options)}</code>`;
 }
 
 function inlineNodesToPlainText(nodes: InlineNode[]): string {
@@ -135,9 +135,9 @@ function renderInlineNodeToHtml(node: InlineNode, options: ResolvedInlineHtmlOpt
     case "underline":
       return `<u>${renderChildren(node.children, options)}</u>`;
     case "text_color":
-      return `<span data-inline-type="text_color" data-inline-color="${esc(node.color)}" style="${getInlineTextColorCss(node.color)}">${renderChildren(node.children, options)}</span>`;
+      return `<span data-inline-type="text_color" data-inline-color="${esc(node.color)}" style="${esc(getInlineTextColorCss(node.color))}">${renderChildren(node.children, options)}</span>`;
     case "background_color":
-      return `<span data-inline-type="background_color" data-inline-color="${esc(node.color)}" style="${getInlineBackgroundCss(node.color, shouldSuppressInlineBackground(node.children))}">${renderChildren(node.children, options)}</span>`;
+      return `<span data-inline-type="background_color" data-inline-color="${esc(node.color)}" style="${esc(getInlineBackgroundCss(node.color, shouldSuppressInlineBackground(node.children)))}">${renderChildren(node.children, options)}</span>`;
     case "code_rich":
       return renderCodeRich(node, options);
     case "code":

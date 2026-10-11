@@ -21,6 +21,7 @@ import { EMOJI_MAP } from "./parserEmoji";
 import { findClosingBracket } from "./parserInlineUtils";
 import { hostnameFromUrl } from "./urlSugar";
 import { normalizeInlineLinkHref } from "../inlineLinks";
+import { normalizeInlineColorToken } from "../inlineColorTokens";
 
 // CommonMark: every ASCII punctuation character is backslash-escapable.
 const ESCAPABLE_PUNCTUATION = /[!-/:-@[-`{-~]/;
@@ -594,7 +595,11 @@ function matchTaggedInlineColor(
   const end = findMatchingTaggedClose(text, start, tag, true);
   if (end === -1 || end === start) return null;
 
-  const color = text.slice(pos + opener.length, bracketEnd).trim();
+  // The color lands in a style="" attribute, and page text is written by other
+  // members: an unchecked value like `red" onanimationstart="…` was stored XSS.
+  // Only hex and the known aliases parse; anything else stays literal text.
+  const color = normalizeInlineColorToken(text.slice(pos + opener.length, bracketEnd));
+  if (!color) return null;
   const inner = text.slice(start, end);
   return {
     start: pos,

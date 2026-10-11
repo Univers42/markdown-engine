@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert");
-const { loadMarkengineAll } = require("./support/loadMarkengine.cjs");
+const { loadMarkengine, loadMarkengineAll } = require("./support/loadMarkengine.cjs");
 
 const E = loadMarkengineAll();
 const types = (src) => E.parseInline(src).map((node) => node.type);
@@ -133,4 +133,37 @@ test("inline icon serialized as an svg data-uri image round-trips", () => {
   assert.ok(E.parseInlineMarkdown(md).includes(`<img src="${src}" alt=""`), "svg data-uri renders");
   // Re-parsing the same source is stable (persists across save/reload).
   assert.deepEqual(E.parseInline(md).map((n) => n.type), ["image"]);
+});
+
+// Page text is written by other workspace members, and [color=]/[bg=] values land in a
+// style="" attribute: an unchecked value was stored XSS (fires on page load, no click).
+test("inline color tags only parse a safe color; a quote-breaking value stays text", () => {
+  for (const tag of ["color", "bg"]) {
+    const md = `[${tag}=red;animation:toast-in 1s" onanimationstart="alert(1)" x="]hi[/${tag}]`;
+    assert.deepEqual(types(md), ["text"], `${tag}: payload must not become a color node`);
+    const html = E.parseInlineMarkdown(md);
+    assert.equal(html.includes('onanimationstart="'), false, `${tag}: no injected attribute`);
+    assert.equal(html.includes("<span"), false, `${tag}: payload renders as literal text`);
+  }
+  // rgb() passes the channel check with junk after the 3rd channel; only the
+  // normalized hex may reach the markup.
+  const rgb = E.parseInlineMarkdown('[color=rgb(1,2,3" onmouseover="x)]a[/color]');
+  assert.equal(rgb.includes('onmouseover="'), false);
+  assert.match(rgb, /style="color:#010203;/);
+});
+
+test("inline colors the editor writes keep rendering, normalized to hex", () => {
+  assert.match(E.parseInlineMarkdown("[color=#2563EB]a[/color]"), /style="color:#2563EB;/);
+  assert.match(E.parseInlineMarkdown("[color=red]a[/color]"), /style="color:#F43F5E;/);
+  assert.match(E.parseInlineMarkdown("[bg=#facc15]a[/bg]"), /#FACC1533/);
+  assert.equal(E.parseInline("[color=#f00]a[/color]")[0].color, "#FF0000");
+});
+
+test("the html renderer escapes style values built from an AST color", () => {
+  const { renderInlineNodesToHtml } = loadMarkengine("markdown/renderers/inlineHtml.ts");
+  const evil = 'red" onfocus="x';
+  for (const type of ["text_color", "background_color"]) {
+    const html = renderInlineNodesToHtml([{ type, color: evil, children: [{ type: "text", value: "a" }] }]);
+    assert.equal(html.includes('onfocus="'), false, `${type}: style value escaped`);
+  }
 });

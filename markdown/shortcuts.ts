@@ -26,10 +26,174 @@ export { parseInlineMarkdown } from "./inlineMarkdown";
 /**
  * Convert a full markdown string into an array of Notion-style blocks.
  * Uses the full AST parser, then maps to Block types.
+ * With `keepEmptyParagraphs`, extra blank lines become empty paragraphs.
+ * O(T): T markdown characters, single parse plus one linear pre-pass.
  */
-export function parseMarkdownToBlocks(markdown: string): Block[] {
-  const ast = parse(markdown);
-  return ast.flatMap((node) => astToBlocks(node));
+export function parseMarkdownToBlocks(markdown: string, options?: ParseOptions): Block[] {
+  const keep = options?.keepEmptyParagraphs === true;
+  const source = keep ? withEmptySentinels(markdown) : markdown;
+  const ast = parse(source);
+  const blocks = ast.flatMap((node) => astToBlocks(node));
+  return keep ? withoutEmptySentinels(blocks) : blocks;
+}
+
+/** Parse options: `keepEmptyParagraphs` restores opt-in empty paragraphs. */
+export interface ParseOptions {
+  keepEmptyParagraphs?: boolean;
+}
+
+// A lone zero-width space parses as a one-character paragraph anywhere,
+// including tab/space-indented toggle and list bodies, so extra blank lines
+// are rewritten to it before parsing and mapped back to "" afterwards.
+// Ponytail: a user paragraph holding exactly one ZWSP becomes empty (false
+// positive); prose never holds a lone invisible character, so nothing is lost.
+const EMPTY_SENTINEL = "​";
+
+/** Same-level non-blank: starts with the prefix and its next char is content. O(P). */
+function isSameLevel(line: string, prefix: string): boolean {
+  if (prefix === "") {
+    if (line.trim() === "") return false;
+    const first = line.charCodeAt(0);
+    return first !== 32 && first !== 9;
+  }
+  if (!line.startsWith(prefix) || line.trim() === "") return false;
+  const next = line.charCodeAt(prefix.length);
+  return next !== 32 && next !== 9;
+}
+
+/**
+ * Lines inside fenced code or $$ math are code content: their blanks must not
+ * become empty paragraphs. One linear scan tracking open/close fences. O(L).
+ * Ponytail: an indented-code block's blanks are treated as separators (false
+ * positive); fenced code (the only form the serializer emits) is exact.
+ */
+function fenceProtected(lines: string[]): boolean[] {
+  const guarded: boolean[] = new Array<boolean>(lines.length).fill(false);
+  let fence: string | null = null;
+  let math = false;
+  for (let index = 0; index < lines.length; index++) {
+    const trimmed = (lines[index] ?? "").trimStart();
+    if (!fence && !math && (trimmed.startsWith("```") || trimmed.startsWith("~~~"))) {
+      fence = trimmed.slice(0, 3);
+      continue;
+    }
+    if (fence && trimmed.startsWith(fence)) {
+      fence = null;
+      continue;
+    }
+    if (!fence && (lines[index] ?? "").trim() === "$$") {
+      math = !math;
+      continue;
+    }
+    if (fence || math) guarded[index] = true;
+  }
+  return guarded;
+}
+
+/** Blank-run expansion for one exact-prefix run. O(K): K run length. */
+function expandRun(prefix: string, count: number, kind: string): string[] {
+  const sentinel = `${prefix}${EMPTY_SENTINEL}`;
+  const out: string[] = [];
+  if (kind === "keep") {
+    for (let index = 0; index < count; index++) out.push(prefix);
+    return out;
+  }
+  if (kind === "all") {
+    out.push(sentinel);
+    for (let empty = 1; empty < count; empty++) {
+      out.push(prefix);
+      out.push(sentinel);
+    }
+    return out;
+  }
+  if (kind === "lead") {
+    for (let empty = 0; empty < count; empty++) {
+      out.push(sentinel);
+      out.push(prefix);
+    }
+    return out;
+  }
+  for (let empty = 0; empty < count; empty++) {
+    out.push(prefix);
+    out.push(sentinel);
+  }
+  if (kind === "between") out.push(prefix);
+  return out;
+}
+
+/**
+ * Classify an exact-prefix blank run: all/lead/trail/between/keep.
+ * O(1): only the two neighbouring lines are inspected.
+ */
+function classifyRun(run: { prefix: string; count: number; prev: string | null; next: string | null; hasNonBlank: boolean }): { kind: string; empties: number } {
+  const { prefix, count, prev, next, hasNonBlank } = run;
+  if (!hasNonBlank) return { kind: count <= 1 ? "keep" : "all", empties: count - 1 };
+  if (prev === null) return { kind: "lead", empties: count };
+  if (next === null) {
+    const trailing = prefix === "" ? count - 1 : count;
+    return { kind: trailing <= 0 ? "keep" : "trail", empties: trailing };
+  }
+  if (prefix === "") return { kind: count <= 1 ? "keep" : "between", empties: count - 1 };
+  const before = isSameLevel(prev, prefix);
+  const after = isSameLevel(next, prefix);
+  if (before && after) return { kind: count <= 1 ? "keep" : "between", empties: count - 1 };
+  if (!before && after) return { kind: "lead", empties: count };
+  if (before && !after) return { kind: "trail", empties: count };
+  return { kind: "keep", empties: 0 };
+}
+
+/**
+ * Rewrite extra blank lines to sentinel paragraphs at the same indentation.
+ * Exact-prefix runs keep levels apart: "" (top), "\t" (toggle), "  " (list).
+ * Quote ">" blanks are left alone (quotes flatten children to content).
+ * O(T): T characters, one pass with no per-line regex compilation.
+ */
+function withEmptySentinels(markdown: string): string {
+  if (!markdown.includes("\n")) return markdown;
+  const lines = markdown.split("\n");
+  const guarded = fenceProtected(lines);
+  let hasNonBlank = false;
+  for (let index = 0; index < lines.length; index++) {
+    if (!guarded[index] && (lines[index] ?? "").trim() !== "") {
+      hasNonBlank = true;
+      break;
+    }
+  }
+  const out: string[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    const line = lines[index] ?? "";
+    if (guarded[index] || line.trim() !== "") {
+      out.push(line);
+      index += 1;
+      continue;
+    }
+    let end = index + 1;
+    while (end < lines.length && !guarded[end] && (lines[end] ?? "") === line) end += 1;
+    const prevRef = index > 0 ? (lines[index - 1] ?? "") : null;
+    const nextRef = end < lines.length ? (lines[end] ?? "") : null;
+    const classified = classifyRun({ prefix: line, count: end - index, prev: prevRef, next: nextRef, hasNonBlank });
+    if (classified.kind === "keep") {
+      for (let raw = index; raw < end; raw++) out.push(lines[raw] ?? "");
+    } else {
+      out.push(...expandRun(line, classified.empties, classified.kind));
+    }
+    index = end;
+  }
+  return out.join("\n");
+}
+
+/**
+ * Map sentinel paragraphs back to empty paragraphs, recursively through any
+ * children nesting. O(B): B blocks, one lookup per block.
+ */
+function withoutEmptySentinels(blocks: Block[]): Block[] {
+  return blocks.map((block) => {
+    const children = block.children === undefined ? undefined : withoutEmptySentinels(block.children);
+    if (block.content === EMPTY_SENTINEL) return { ...block, content: "", ...(children === undefined ? {} : { children }) };
+    if (children === undefined) return block;
+    return { ...block, children };
+  });
 }
 
 // ─── App-block dialect ────────────────────────────────────────────────────────
@@ -294,14 +458,21 @@ function astToBlocks(node: BlockNode): Block[] {
       const rows = node.rows.map((row) =>
         row.cells.map((cell) => inlineToMarkdown(cell.children)),
       );
-
+      // The engine pads narrow tables to 3 columns; slice back to the source
+      // width so 1- and 2-column tables survive the round-trip. O(R×C).
+      const width = Math.max(header.length, ...rows.map((row) => row.length));
+      const seed = createTableBlockFromData([header, ...rows], {
+        columnAlignments: node.alignments,
+      });
+      const tableData = seed.tableData.map((row) => row.slice(0, width));
+      const aligns = seed.tableConfig.columnAlignments?.slice(0, width);
       return [
         {
           id: crypto.randomUUID(),
           type: "table_block",
-          ...createTableBlockFromData([header, ...rows], {
-            columnAlignments: node.alignments,
-          }),
+          ...seed,
+          tableData,
+          tableConfig: { ...seed.tableConfig, ...(aligns === undefined ? {} : { columnAlignments: aligns }) },
         },
       ];
     }
@@ -315,46 +486,30 @@ type ListItemNodeLike = {
   checked?: boolean;
 };
 
-function isListBlock(node: BlockNode): boolean {
-  return (
-    node.type === "ordered_list" ||
-    node.type === "unordered_list" ||
-    node.type === "task_list"
-  );
-}
-
 function listItemToBlock(
   type: "bulleted_list" | "numbered_list" | "to_do",
   item: ListItemNodeLike,
   checked?: boolean,
 ): Block {
-  const nestedBlocks = item.children.flatMap((child) => {
-    if (isListBlock(child)) {
-      return astToBlocks(child);
-    }
-
-    return [];
-  });
-  const content = item.children
-    .filter((child) => !isListBlock(child))
-    .map((child) => blockToMarkdown(child))
-    .filter(Boolean)
-    .join("\n");
-
+  // Every nested node becomes a real child block (toggles, quotes, nested
+  // lists alike); only the leading paragraph stays the item's own text, so a
+  // toggle or list inside an item is no longer flattened into its content.
+  // O(C): C nested nodes, each converted once.
+  const blocks = item.children.flatMap((child) => astToBlocks(child));
+  const first = blocks[0];
+  const content = first !== undefined && first.type === "paragraph" ? first.content : "";
+  const rest = first !== undefined && first.type === "paragraph" ? blocks.slice(1) : blocks;
   const block: Block = {
     id: crypto.randomUUID(),
     type,
     content,
   };
-
   if (checked !== undefined) {
     block.checked = checked;
   }
-
-  if (nestedBlocks.length > 0) {
-    block.children = nestedBlocks;
+  if (rest.length > 0) {
+    block.children = rest;
   }
-
   return block;
 }
 

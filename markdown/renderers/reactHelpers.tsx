@@ -220,6 +220,10 @@ export function renderInlineNode(
       const href = sanitizeUrl(node.href);
       const isExt = isExternalUrl(href);
       const isMention = isLinkMention(node.title);
+      // See inlineHtml.ts renderLink: an unverifiable mention is plain text, not a chip.
+      if (isMention && mentionHost(href) === "") {
+        return React.createElement(React.Fragment, { key }, ...renderInlines(node.children, o));
+      }
       const favicon = isMention ? mentionFaviconSrc(href) : "";
       const props: Record<string, unknown> = {
         key,

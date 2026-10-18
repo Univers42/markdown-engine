@@ -82,6 +82,9 @@ function renderLink(node: Extract<InlineNode, { type: "link" }>, options: Resolv
   }
   const href = sanitizeUrl(node.href);
   const isMention = isLinkMention(node.title);
+  // A chip promises "this is that site". With credentials in the URL or a non-http scheme
+  // it cannot keep that promise (`https://google.com@evil.example/`), so it is not a link.
+  if (isMention && mentionHost(href) === "") return renderChildren(node.children, options);
   const classes = [options.editorChrome ? "editor-link" : "", isMention ? "editor-link-mention" : ""].filter(Boolean).join(" ");
   const attrs = [
     `href="${esc(href || "#")}"`,

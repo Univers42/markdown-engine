@@ -11,6 +11,7 @@
 /* ************************************************************************** */
 
 import { normalizeInlineColorToken } from "./inlineColorTokens";
+import { LINK_EDIT_TOOLTIP, LINK_MENTION_TITLE } from "./markdown/linkMention";
 
 export interface ElementFormattingState {
   bold: boolean;
@@ -280,8 +281,13 @@ function getLinkTitle(element: HTMLElement) {
     return null;
   }
 
+  // The rendered tooltip of a mention is its host; the marker is what round-trips.
+  if (element.dataset.linkMention === "true") {
+    return LINK_MENTION_TITLE;
+  }
+
   const title = element.getAttribute("title");
-  return title?.trim() ? title : null;
+  return title?.trim() && title !== LINK_EDIT_TOOLTIP ? title : null;
 }
 
 function getInternalPageId(element: HTMLElement) {

@@ -21,6 +21,7 @@ import {
   unwrapCodeRichStyles,
 } from "./inlineStyleHelpers";
 import { isExternalUrl, sanitizeUrl } from "../../renderCore";
+import { isLinkMention, mentionFaviconSrc, mentionHost } from "../linkMention";
 
 export interface ReactRenderHelperOptions {
   classPrefix: string;
@@ -218,20 +219,33 @@ export function renderInlineNode(
     case "link": {
       const href = sanitizeUrl(node.href);
       const isExt = isExternalUrl(href);
+      const isMention = isLinkMention(node.title);
+      const favicon = isMention ? mentionFaviconSrc(href) : "";
       const props: Record<string, unknown> = {
         key,
         href: href || "#",
-        title: node.title || undefined,
-        className: "editor-link",
+        // The reserved mention marker is never a tooltip: the host is.
+        title: (isMention ? mentionHost(href) : node.title) || undefined,
+        className: isMention ? "editor-link editor-link-mention" : "editor-link",
+        ...(isMention ? { "data-link-mention": "true" } : {}),
         ...(o.externalLinks && isExt
           ? { target: "_blank", rel: "noopener noreferrer" }
           : {}),
       };
-      return React.createElement(
-        "a",
-        props,
-        ...renderInlines(node.children, o),
-      );
+      const children = renderInlines(node.children, o);
+      if (favicon) {
+        children.unshift(
+          React.createElement("img", {
+            key: "favicon",
+            className: "editor-link-favicon",
+            "data-link-favicon": "true",
+            src: favicon,
+            alt: "",
+            loading: "lazy",
+          }),
+        );
+      }
+      return React.createElement("a", props, ...children);
     }
 
     case "internal_link":

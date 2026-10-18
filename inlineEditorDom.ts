@@ -160,6 +160,11 @@ function readElementNode(element: HTMLElement): DomReadResult {
     };
   }
 
+  // A mention's favicon is chrome rendered from the link, not content to serialize.
+  if (element.tagName === "IMG" && element.dataset.linkFavicon === "true") {
+    return { nodes: [], requiresNormalization: false, hasElementNodes: true };
+  }
+
   if (element.tagName === "IMG") {
     return readImageElement(element);
   }

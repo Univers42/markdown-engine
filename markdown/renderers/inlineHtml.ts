@@ -19,6 +19,7 @@ import {
   unwrapCodeRichStyles,
 } from "./inlineStyleHelpers";
 import { escapeHtml, isExternalUrl, sanitizeUrl } from "../../renderCore";
+import { LINK_EDIT_TOOLTIP, isLinkMention, mentionFaviconSrc, mentionHost } from "../linkMention";
 
 export interface InlineHtmlOptions {
   classPrefix?: string;
@@ -80,14 +81,34 @@ function renderLink(node: Extract<InlineNode, { type: "link" }>, options: Resolv
     return esc(`[${inlineNodesToPlainText(node.children)}](${node.href}${title})`);
   }
   const href = sanitizeUrl(node.href);
+  const isMention = isLinkMention(node.title);
+  const classes = [options.editorChrome ? "editor-link" : "", isMention ? "editor-link-mention" : ""].filter(Boolean).join(" ");
   const attrs = [
     `href="${esc(href || "#")}"`,
-    node.title ? `title="${esc(node.title)}"` : options.editorChrome ? 'title="Ctrl/\u2318-click to edit \u00B7 click to open"' : "",
-    options.editorChrome ? 'class="editor-link"' : "",
+    linkTitleAttr(node.title, href, options),
+    classes ? `class="${classes}"` : "",
+    isMention ? 'data-link-mention="true"' : "",
     options.externalLinks && isExternalUrl(href) ? 'target="_blank" rel="noopener noreferrer"' : "",
   ].filter(Boolean).join(" ");
   const suffix = options.editorChrome ? "\u200B" : "";
-  return `<a ${attrs}>${renderChildren(node.children, options)}</a>${suffix}`;
+  const favicon = isMention ? renderMentionFavicon(href) : "";
+  return `<a ${attrs}>${favicon}${renderChildren(node.children, options)}</a>${suffix}`;
+}
+
+// The reserved mention marker is never shown as a tooltip: the host is.
+function linkTitleAttr(title: string | undefined, href: string, options: ResolvedInlineHtmlOptions): string {
+  if (isLinkMention(title)) {
+    const host = mentionHost(href);
+    return host ? `title="${esc(host)}"` : "";
+  }
+  if (title) return `title="${esc(title)}"`;
+  return options.editorChrome ? `title="${LINK_EDIT_TOOLTIP}"` : "";
+}
+
+// Size comes from CSS (tokens), not attributes, so a failed load collapses to nothing.
+function renderMentionFavicon(href: string): string {
+  const src = mentionFaviconSrc(href);
+  return src ? `<img class="editor-link-favicon" data-link-favicon="true" src="${esc(src)}" alt="" loading="lazy" />` : "";
 }
 
 function renderInternalLink(node: Extract<InlineNode, { type: "internal_link" }>, options: ResolvedInlineHtmlOptions): string {

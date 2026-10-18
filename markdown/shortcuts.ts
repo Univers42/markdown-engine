@@ -211,6 +211,8 @@ const APP_FENCE_TO_BLOCK: Record<string, BlockType> = {
   osihome: "home_views",
   osilayout: "layout",
   osiwhiteboard: "whiteboard",
+  osiembed: "embed",
+  osibookmark: "bookmark",
 };
 
 function safeJsonRecord(value: string): Record<string, unknown> | null {

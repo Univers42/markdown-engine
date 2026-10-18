@@ -56,6 +56,8 @@ export type MarkEngineBlockType =
   | 'graph_view'
   | 'draw'
   | 'whiteboard'
+  | 'embed'
+  | 'bookmark'
   | 'home_views'
   | 'placeholder';
 
@@ -82,6 +84,9 @@ export interface MarkEngineBlock {
   drawHeight?: number;
   boardSlug?: string;
   whiteboardHeight?: number;
+  embedHeight?: number;
+  // `embed` (the link-metadata snapshot) is deliberately not declared: its shape belongs to
+  // the host, which re-validates it on decode, and the engine only carries it as JSON.
   tableData?: string[][];
   tableConfig?: TableBlockConfig;
   [key: string]: unknown;

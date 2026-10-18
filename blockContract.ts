@@ -55,6 +55,7 @@ export type MarkEngineBlockType =
   | 'database_full_page'
   | 'graph_view'
   | 'draw'
+  | 'whiteboard'
   | 'home_views'
   | 'placeholder';
 
@@ -79,6 +80,8 @@ export interface MarkEngineBlock {
   mediaAlt?: string;
   fileName?: string;
   drawHeight?: number;
+  boardSlug?: string;
+  whiteboardHeight?: number;
   tableData?: string[][];
   tableConfig?: TableBlockConfig;
   [key: string]: unknown;

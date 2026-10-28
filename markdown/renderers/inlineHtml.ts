@@ -32,6 +32,14 @@ export interface InlineHtmlOptions {
   // the inline "reveal" the editor's Ctrl/Cmd-click link editor toggles on, so a
   // link can be edited as markdown in place (symmetric to renderInlineMathAsSource).
   renderLinkAsSource?: boolean;
+  // `{{expr}}` → its display value. null (or no resolver) keeps the literal source,
+  // so an unknown name in pasted Vue/Jinja text is shown unchanged.
+  resolveVariable?: (expr: string) => ResolvedVariable | null;
+}
+
+export interface ResolvedVariable {
+  text: string;
+  error?: string;
 }
 
 const DEFAULT_INLINE_HTML_OPTIONS: Required<
@@ -67,6 +75,7 @@ function inlineNodesToPlainText(nodes: InlineNode[]): string {
   return nodes
     .map((n) => {
       if (n.type === "text" || n.type === "code" || n.type === "emoji") return n.value;
+      if (n.type === "variable") return `{{${n.expr}}}`;
       if ("children" in n && Array.isArray(n.children)) return inlineNodesToPlainText(n.children);
       return "";
     })
@@ -120,6 +129,17 @@ function renderInternalLink(node: Extract<InlineNode, { type: "internal_link" }>
   const icon = resolved?.icon ? `<span style="margin-right:4px">${esc(resolved.icon)}</span>` : "";
   const suffix = options.editorChrome ? "\u200B" : "";
   return `<span class="editor-mention page-mention-placeholder" data-page-id="${esc(node.pageId)}" contenteditable="false">${icon}${esc(title)}</span>${suffix}`;
+}
+
+// Atomic like a page mention: the editor reads `data-var-expr` back, never the text.
+function renderVariable(node: Extract<InlineNode, { type: "variable" }>, options: ResolvedInlineHtmlOptions): string {
+  const source = `{{${node.expr}}}`;
+  const resolved = options.resolveVariable?.(node.expr);
+  if (!resolved) return esc(source);
+  const cls = `${options.classPrefix}-variable${resolved.error ? ` ${options.classPrefix}-variable-error` : ""}`;
+  const title = resolved.error ? `${source} — ${resolved.error}` : source;
+  const suffix = options.editorChrome ? "\u200B" : "";
+  return `<span class="${cls}" data-inline-type="variable" data-var-expr="${esc(node.expr)}" contenteditable="false" title="${esc(title)}">${esc(resolved.text)}</span>${suffix}`;
 }
 
 // sanitizeUrl drops every non-http(s) scheme, which would blank an uploaded / pasted
@@ -186,6 +206,8 @@ function renderInlineNodeToHtml(node: InlineNode, options: ResolvedInlineHtmlOpt
       return renderInlineMath(node, options);
     case "emoji":
       return node.value;
+    case "variable":
+      return renderVariable(node, options);
     case "line_break":
       return "<br />";
     case "footnote_ref":

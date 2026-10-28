@@ -696,6 +696,8 @@ function inlineToMarkdown(nodes: InlineNode[]): string {
           return `[^${n.label}]`;
         case "internal_link":
           return `[[page:${n.pageId}]]`;
+        case "variable":
+          return `{{${n.expr}}}`;
         default:
           return "";
       }

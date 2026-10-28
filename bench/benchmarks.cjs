@@ -86,6 +86,17 @@ function createMixedInlineParagraph(targetLength) {
   return text.slice(0, targetLength);
 }
 
+// 50 `{{…}}` references in ~3.6K chars of prose: the shape of a templated page. Only the
+// parse is A/B-guarded — the pinned reference has no variables, so a render case would
+// compare chips against plain text (tests/bench/variables.bench.ts measures rendering).
+function createVariableParagraph(count) {
+  let text = "";
+  for (let index = 0; index < count; index++) {
+    text += `Invoice ${index} for {{CLIENT}} is due {{ LAUNCH | date:"dd MMM" }}, ok. `;
+  }
+  return text;
+}
+
 function createFormattingSource(nodeCount) {
   const parts = [];
   for (let index = 0; index < nodeCount; index++) {
@@ -227,6 +238,7 @@ function createBenchmarkScenarios(root = MARKENGINE_ROOT) {
   const markdown100Kb = createMarkdownDocument(100 * 1024);
   const markdown1Mb = createMarkdownDocument(1024 * 1024);
   const inlineParagraph = createMixedInlineParagraph(10_000);
+  const variableParagraph = createVariableParagraph(50);
   const incrementalBase = createMarkdownDocument(16 * 1024);
   const incrementalBaseResult = canonical.parseMarkdown(incrementalBase, {
     documentVersion: 1,
@@ -260,6 +272,12 @@ function createBenchmarkScenarios(root = MARKENGINE_ROOT) {
       name: "parse inline mixed 10K chars",
       run() {
         richParser.parseInline(inlineParagraph);
+      },
+    },
+    {
+      name: "parse inline 50 variables",
+      run() {
+        richParser.parseInline(variableParagraph);
       },
     },
     {

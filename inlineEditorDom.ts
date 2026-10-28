@@ -24,7 +24,7 @@ import { containsBareUrlShape } from "./markdown/parserInlineMatchers";
 // bare scheme-less URL (`www.foo.com`) never matched — its live autolink re-render is
 // gated below via containsBareUrlShape instead. `^` and `|` are in the class so the
 // ^sup^ / ||spoiler|| sugar re-renders while typing.
-const INLINE_SOURCE_NORMALIZATION_PATTERN = /[[\]_*~`:$!<\\=^|]/;
+const INLINE_SOURCE_NORMALIZATION_PATTERN = /[[\]_*~`:$!<\\=^|{}]/;
 
 interface DomReadResult {
   nodes: InlineNode[];
@@ -167,6 +167,16 @@ function readElementNode(element: HTMLElement): DomReadResult {
 
   if (element.tagName === "IMG") {
     return readImageElement(element);
+  }
+
+  // A resolved `{{expr}}` chip: the source is the attribute, the text is display only.
+  const variableExpr = element.dataset.inlineType === "variable" ? element.dataset.varExpr : undefined;
+  if (variableExpr !== undefined) {
+    return {
+      nodes: [{ type: "variable", expr: variableExpr }],
+      requiresNormalization: false,
+      hasElementNodes: true,
+    };
   }
 
   const formatting = getElementFormattingState(element);

@@ -198,6 +198,10 @@ export function areInlineNodesEqual(left: InlineNode, right: InlineNode): boolea
       const next = right as typeof left;
       return left.pageId === next.pageId;
     }
+    case "variable": {
+      const next = right as typeof left;
+      return left.expr === next.expr;
+    }
     case "line_break":
       return true;
     case "image": {
@@ -264,7 +268,8 @@ function splitNodeAtOffset(
     node.type === "math_inline" ||
     node.type === "footnote_ref" ||
     node.type === "line_break" ||
-    node.type === "internal_link"
+    node.type === "internal_link" ||
+    node.type === "variable"
   ) {
     return offset > 0 ? [[node], []] : [[], [node]];
   }
@@ -294,6 +299,8 @@ function getInlineNodeTextLength(node: InlineNode): number {
       return node.label.length + 2;
     case "internal_link":
       return node.pageId.length + 9; // "[[page:ID]]"
+    case "variable":
+      return node.expr.length + 4; // "{{expr}}"
     case "line_break":
       return 1;
     case "image":
@@ -322,7 +329,8 @@ function normalizeInlineNode(node: InlineNode): InlineNode[] {
     node.type === "footnote_ref" ||
     node.type === "line_break" ||
     node.type === "image" ||
-    node.type === "internal_link"
+    node.type === "internal_link" ||
+    node.type === "variable"
   ) {
     return [node];
   }
@@ -414,6 +422,8 @@ function serializeInlineNode(node: InlineNode): string {
       return `[^${node.label}]`;
     case "emoji":
       return node.value;
+    case "variable":
+      return `{{${node.expr}}}`;
   }
 }
 

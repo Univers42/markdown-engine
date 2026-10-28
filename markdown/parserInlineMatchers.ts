@@ -38,6 +38,10 @@ export const BARE_WWW_RE = /^www\.[^\s<>()[\]]+[^\s<>()[\].,;:!?'"]/i;
 const BARE_URL_STICKY = /https?:\/\/[^\s<>()[\]]+[^\s<>()[\].,;:!?'"]/y;
 const BARE_WWW_STICKY = /www\.[^\s<>()[\]]+[^\s<>()[\].,;:!?'"]/iy;
 const EMOJI_STICKY = /:([a-zA-Z0-9_+-]+):/y;
+// A name, then `| filter args` segments. Each segment opens on a literal `|` and its
+// body can't hold one, so the match is linear (no nested-quantifier backtracking).
+const VARIABLE_EXPR_RE = /^[ \t]*[A-Za-z_][\w.-]*[ \t]*(?:\|[^|{}\n]*)*$/;
+const VARIABLE_MAX_EXPR = 256;
 
 // Non-anchored twin of the two bare-URL matchers (leading `^` dropped) so the editor's
 // live-render gate can ask "does this source contain a bare-URL shape anywhere?" — a
@@ -57,6 +61,24 @@ export function containsBareUrlShape(text: string): boolean {
 function execSticky(re: RegExp, text: string, pos: number): RegExpExecArray | null {
   re.lastIndex = pos;
   return re.exec(text);
+}
+
+// `{{NAME | filter:"arg"}}`. The close is searched within VARIABLE_MAX_EXPR chars and
+// stops at a newline or `{`, so a stray `{{` in long prose costs O(256), not O(n).
+function matchVariable(text: string, pos: number): InlineMatchResult | null {
+  if (text.charCodeAt(pos + 1) !== 123) return null;
+  const limit = Math.min(text.length - 1, pos + 2 + VARIABLE_MAX_EXPR);
+  for (let i = pos + 2; i < limit; i++) {
+    const code = text.charCodeAt(i);
+    if (code === 10 || code === 123) return null;
+    if (code !== 125) continue;
+    if (text.charCodeAt(i + 1) !== 125) return null;
+    const expr = text.slice(pos + 2, i);
+    return VARIABLE_EXPR_RE.test(expr)
+      ? { start: pos, end: i + 2, node: { type: "variable", expr } }
+      : null;
+  }
+  return null;
 }
 
 function matchBareUrl(text: string, pos: number): InlineMatchResult | null {
@@ -847,6 +869,7 @@ export function createInlineDispatch(
         node: { type: "emoji", value: emoji, raw: name },
       };
     }),
+    defineMatcher(["{"], matchVariable),
     defineMatcher(["="], (text, pos) =>
       matchDelimited(text, pos, "==", "==", parseInline, (children) => ({
         type: "highlight",

@@ -162,7 +162,7 @@ export {
  * const options: InlineHtmlOptions = { editorChrome: false };
  * ```
  */
-export type { InlineHtmlOptions } from "./markdown/renderers/inlineHtml";
+export type { InlineHtmlOptions, ResolvedVariable } from "./markdown/renderers/inlineHtml";
 /**
  * Browser worker client and worker configuration for MarkEngine offload.
  *

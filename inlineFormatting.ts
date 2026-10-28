@@ -270,7 +270,7 @@ function getLeafFormatState(
   if (node.type === "code") {
     return node.value.length > 0 ? active || format === "code" : null;
   }
-  if (node.type === "footnote_ref" || node.type === "line_break") {
+  if (node.type === "footnote_ref" || node.type === "line_break" || node.type === "variable") {
     return active;
   }
   return null;
@@ -315,7 +315,7 @@ function getLeafColorMarker(
   if (node.type === "text" || node.type === "code" || node.type === "emoji" || node.type === "math_inline") {
     return node.value.length > 0 ? activeColor ?? NO_ACTIVE_VALUE : null;
   }
-  if (node.type === "footnote_ref" || node.type === "line_break") {
+  if (node.type === "footnote_ref" || node.type === "line_break" || node.type === "variable") {
     return activeColor ?? NO_ACTIVE_VALUE;
   }
   return null;
@@ -495,6 +495,8 @@ function getInlineNodeTextContent(node: InlineNode): string {
       return node.value;
     case "footnote_ref":
       return `[^${node.label}]`;
+    case "variable":
+      return `{{${node.expr}}}`;
     case "line_break":
       return "\n";
     case "image":

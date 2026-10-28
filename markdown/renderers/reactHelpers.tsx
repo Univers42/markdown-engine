@@ -34,6 +34,7 @@ export interface ReactRenderHelperOptions {
     title?: string,
   ) => React.ReactElement;
   internalLinkRenderer?: (pageId: string) => React.ReactNode;
+  variableRenderer?: (expr: string) => React.ReactNode;
 }
 
 export function renderTable(
@@ -352,6 +353,13 @@ export function renderInlineNode(
         "span",
         { key, role: "img", "aria-label": node.raw, title: `:${node.raw}:` },
         node.value,
+      );
+
+    case "variable":
+      return React.createElement(
+        React.Fragment,
+        { key },
+        o.variableRenderer ? o.variableRenderer(node.expr) : `{{${node.expr}}}`,
       );
 
     default:

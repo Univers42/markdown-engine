@@ -66,6 +66,8 @@ export interface ReactRenderOptions {
   ) => React.ReactElement;
   /** Custom internal link renderer (for wiki-style [[page:id]] links) */
   internalLinkRenderer?: (pageId: string) => React.ReactNode;
+  /** Custom `{{expr}}` renderer; without one the literal source is shown */
+  variableRenderer?: (expr: string) => React.ReactNode;
   /** Callback for checkbox toggle in task lists */
   onTaskToggle?: (index: number, checked: boolean) => void;
 }
@@ -77,6 +79,7 @@ const defaults: Required<
     | "mathRenderer"
     | "imageRenderer"
     | "internalLinkRenderer"
+    | "variableRenderer"
     | "onTaskToggle"
     | "blockModes"
     | "resolveBlockMode"

@@ -77,6 +77,8 @@ export function renderInline(node: InlineNode, ctx: RenderCtx): string {
       return `${c(ctx, C.footnote)}[${node.label}]${reset(ctx)}`;
     case 'emoji':
       return node.value;
+    case 'variable':
+      return `{{${node.expr}}}`;
     default:
       return '';
   }
@@ -99,6 +101,7 @@ export function renderInlinesPlain(nodes: InlineNode[]): string {
       case 'math_inline': return n.value;
       case 'footnote_ref': return `[${n.label}]`;
       case 'emoji': return n.value;
+      case 'variable': return `{{${n.expr}}}`;
       default: return '';
     }
   }).join('');

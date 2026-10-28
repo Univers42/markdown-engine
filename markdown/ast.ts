@@ -47,7 +47,9 @@ export type InlineNode =
   | { type: 'math_inline'; value: string }
   | { type: 'footnote_ref'; label: string }
   | { type: 'internal_link'; pageId: string }
-  | { type: 'emoji'; value: string; raw: string };
+  | { type: 'emoji'; value: string; raw: string }
+  // `{{NAME | filter}}` — `expr` is the untrimmed inner text, so it round-trips byte-for-byte.
+  | { type: 'variable'; expr: string };
 
 // ─── Block nodes (structural containers) ──────────────────────────────────────
 
@@ -112,7 +114,7 @@ export function isInlineNode(node: unknown): node is InlineNode {
     'text_color', 'background_color', 'code_rich',
     'code', 'link', 'image', 'line_break', 'highlight',
     'subscript', 'superscript', 'kbd', 'spoiler', 'math_inline',
-    'footnote_ref', 'internal_link', 'emoji',
+    'footnote_ref', 'internal_link', 'emoji', 'variable',
   ].includes(node.type);
 }
 

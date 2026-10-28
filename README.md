@@ -92,6 +92,21 @@ For `contentEditable` integrations, `markengine` also exposes:
 - `setInlineEditorSelectionOffsets(root, offsets)` to restore the browser selection
 - `normalizeInlineLinkHref(href)` to normalize user-entered inline link targets
 
+### Variables
+
+`{{NAME}}` and `{{NAME | filter:"arg" | filter}}` parse to `{ type: "variable", expr }`, where `expr` is the raw inner text, so parse → serialize gives back the same bytes. A name starts with a letter or `_`, then letters, digits, `_`, `.` or `-` (`page.Status`). `{{}}`, a space inside a name, a newline, and an inner text over 256 characters stay plain text. A code span or a leading `\` escapes the syntax. `$` is not used because it starts inline math.
+
+The engine owns the syntax and the markup only. **It never resolves a name**:
+
+- `renderInlineNodesToHtml(nodes, { resolveVariable })` calls `resolveVariable(expr)`, which returns `{ text, error? }` or `null`.
+  - A value gives the atomic chip `<span class="md-variable" data-inline-type="variable" data-var-expr="…" contenteditable="false" title="{{…}}">`.
+  - An `error` adds `md-variable-error` and appends the message to the `title`.
+  - `null`, or no hook at all, keeps the literal `{{…}}`.
+- `renderInlines(nodes, { variableRenderer })` in `react.tsx` hands `expr` to the host; without it the React renderer prints the literal source.
+- `readInlineEditorDomState` reads a chip back as its `variable` node, never as its rendered text, so editing next to a chip keeps the source.
+
+Tests: `tests/variables.test.cjs`. The osionos resolver (env.json, built-ins, filters) is documented in the app's `docs/variables.md`.
+
 ### Inline formatting architecture
 
 The inline editor pipeline is intentionally split into small modules:

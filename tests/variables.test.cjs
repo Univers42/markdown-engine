@@ -83,3 +83,41 @@ test("React: the host renderer receives the expression; default is the literal",
   const [fallback] = R.renderInlines(nodes, { classPrefix: "md", externalLinks: true });
   assert.deepStrictEqual(plain(fallback.children), ["{{NOW}}"]);
 });
+
+// mulberry32: a seeded generator, so every run checks the same inputs and a failure
+// names the seed that replays it.
+function seeded(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// The parser may cut one run of text into several text nodes; the meaning is the joined run.
+const textRuns = (nodes) =>
+  plain(nodes).reduce((runs, node) => {
+    const last = runs[runs.length - 1];
+    if (node.type === "text" && last?.type === "text") last.value += node.value;
+    else runs.push(node);
+    return runs;
+  }, []);
+
+// Backslashes are left out: an escape parses to the bare character and is not written
+// back (`\{{X}}` serializes as `{{X}}`), as for every escape. A bare `_` is out too: `_x_`
+// is emphasis, written back canonically as `[i]x[/i]`, and a colon only comes as `:"` (a
+// filter argument) so no `:shortcode:` emoji forms. A code span drops one padding space
+// each side, so bytes are compared only on soup without backticks; the parsed meaning is
+// compared on all of it.
+test("serialize: generated brace soup keeps its meaning; bytes too without code spans", () => {
+  const PIECES = ["{{", "}}", "{", "}", "|", " ", "A", "x9", "page.", "a_b", "-", ':"', '"', "upper", "1", "`", "é"];
+  for (let seed = 0; seed < 2000; seed += 1) {
+    const random = seeded(seed);
+    const src = Array.from({ length: 1 + Math.floor(random() * 12) }, () => PIECES[Math.floor(random() * PIECES.length)]).join("");
+    const written = E.serializeInlineNodes(E.parseInline(src));
+    assert.deepStrictEqual(textRuns(E.parseInline(written)), textRuns(E.parseInline(src)), `seed ${seed}: ${JSON.stringify(src)} → ${JSON.stringify(written)}`);
+    if (!src.includes("`")) assert.equal(written, src, `seed ${seed}`);
+  }
+});

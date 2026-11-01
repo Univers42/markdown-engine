@@ -147,7 +147,13 @@ const makeBackgroundColor = (color: string, children: InlineNode[]): InlineNode 
   color,
   children,
 });
-const makeCodeRich = (children: InlineNode[]): InlineNode => ({ type: "code_rich", children });
+// Code shows what was typed: `{{NOW}}` in a code span stays literal, in both spellings.
+const literalVariable = (node: InlineNode): InlineNode =>
+  node.type === "variable" ? { type: "text", value: `{{${node.expr}}}` } : node;
+const makeCodeRich = (children: InlineNode[]): InlineNode => ({
+  type: "code_rich",
+  children: children.map(literalVariable),
+});
 const makeBold = (children: InlineNode[]): InlineNode => ({ type: "bold", children });
 const makeItalic = (children: InlineNode[]): InlineNode => ({ type: "italic", children });
 const makeStrikethrough = (children: InlineNode[]): InlineNode => ({

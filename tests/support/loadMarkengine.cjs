@@ -8,8 +8,8 @@ const esbuild = require("esbuild");
 
 const MARKENGINE_ROOT = resolve(__dirname, "..", "..");
 
-function loadMarkengine(entry = "index.ts") {
-  const bundle = esbuild.buildSync({
+function bundle(entry) {
+  return esbuild.buildSync({
     entryPoints: [join(MARKENGINE_ROOT, entry)],
     bundle: true,
     platform: "node",
@@ -17,18 +17,20 @@ function loadMarkengine(entry = "index.ts") {
     external: ["react"],
     write: false,
     tsconfig: join(MARKENGINE_ROOT, "tsconfig.json"),
-  });
+  }).outputFiles[0].text;
+}
 
+const localRequire = (id) =>
+  id === "react"
+    ? {
+        Fragment: Symbol.for("react.fragment"),
+        createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
+      }
+    : require(id);
+
+function loadMarkengine(entry = "index.ts") {
   const module = { exports: {} };
-  const localRequire = (id) =>
-    id === "react"
-      ? {
-          Fragment: Symbol.for("react.fragment"),
-          createElement: (type, props, ...children) => ({ type, props: props ?? {}, children }),
-        }
-      : require(id);
-
-  vm.runInNewContext(bundle.outputFiles[0].text, {
+  vm.runInNewContext(bundle(entry), {
     module,
     exports: module.exports,
     require: localRequire,
@@ -41,6 +43,17 @@ function loadMarkengine(entry = "index.ts") {
     URLSearchParams,
     crypto: globalThis.crypto,
   });
+  return module.exports;
+}
+
+/**
+ * The engine in this test's own realm, for timings: the vm context above runs the
+ * engine's string scans ~18x slower ("*a "x10000: 12716 ms there, 697 ms here,
+ * node 22), so a budget measured in it says nothing about the app.
+ */
+function loadMarkengineInRealm(entry = "index.ts") {
+  const module = { exports: {} };
+  new Function("module", "exports", "require", bundle(entry))(module, module.exports, localRequire);
   return module.exports;
 }
 
@@ -58,5 +71,5 @@ function loadMarkengineAll() {
   return Object.assign({}, ...entries.map((entry) => loadMarkengine(entry)));
 }
 
-module.exports = { loadMarkengine, loadMarkengineAll };
+module.exports = { loadMarkengine, loadMarkengineAll, loadMarkengineInRealm };
 

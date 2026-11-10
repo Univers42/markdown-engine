@@ -12,41 +12,38 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const vm = require("node:vm");
+const fs = require("node:fs");
+const path = require("node:path");
 const esbuild = require("esbuild");
-const Node = {
+
+globalThis.Node = globalThis.Node || {
   TEXT_NODE: 3,
   ELEMENT_NODE: 1,
 };
 
-// Anchored to the repo root, not the process cwd: a test that only passes when
-// invoked from one directory is a trap for the next runner.
-const ENGINE_ROOT = require("node:path").resolve(__dirname, "..");
+const ENGINE_ROOT = path.resolve(__dirname, "..");
+const CACHE_DIR = path.join(ENGINE_ROOT, "node_modules/.cache/test-inline-reg");
+fs.mkdirSync(CACHE_DIR, { recursive: true });
 
 function loadModule(entryPoint) {
-  const bundle = esbuild.buildSync({
-    entryPoints: [require("node:path").join(ENGINE_ROOT, entryPoint)],
+  const fullPath = path.resolve(ENGINE_ROOT, entryPoint);
+  if (!fullPath.startsWith(ENGINE_ROOT)) {
+    throw new Error("Invalid entry point");
+  }
+  const safeName = path.basename(entryPoint).replace(/[^a-zA-Z0-9_-]/g, "_");
+  const outfile = path.join(CACHE_DIR, `${safeName}.cjs`);
+
+  esbuild.buildSync({
+    entryPoints: [fullPath],
     bundle: true,
     platform: "node",
     format: "cjs",
-    write: false,
-    tsconfig: require("node:path").join(ENGINE_ROOT, "tsconfig.json"),
+    outfile,
+    tsconfig: path.join(ENGINE_ROOT, "tsconfig.json"),
   });
 
-  const module = { exports: {} };
-  vm.runInNewContext(bundle.outputFiles[0].text, {
-    module,
-    exports: module.exports,
-    require,
-    Node,
-    console,
-    process,
-    Buffer,
-    setTimeout,
-    clearTimeout,
-    queueMicrotask,
-  });
-  return module.exports;
+  delete require.cache[require.resolve(outfile)];
+  return require(outfile);
 }
 
 const { applyInlineFormatting } = loadModule(

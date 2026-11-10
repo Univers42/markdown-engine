@@ -55,14 +55,27 @@ async function render() {
 
   const data = await response.json();
   if (!response.ok) {
-    preview.innerHTML = `<pre class="error">${escapeHtml(data.error || "Preview failed")}</pre>`;
+    showError(data.error || "Preview failed");
     ast.textContent = "";
     return;
   }
 
-  preview.innerHTML = data.html;
+  showPreviewHtml(data.html);
   preview.classList.toggle("source-mode", viewMode === "source");
   ast.textContent = JSON.stringify(data.ast, null, 2);
+}
+
+function showError(message) {
+  const pre = document.createElement("pre");
+  pre.className = "error";
+  pre.textContent = message;
+  preview.replaceChildren(pre);
+}
+
+function showPreviewHtml(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html || "", "text/html");
+  preview.replaceChildren(...doc.body.childNodes);
 }
 
 function escapeHtml(value) {
@@ -79,7 +92,7 @@ function scheduleRender() {
   globalThis.clearTimeout(timer);
   timer = globalThis.setTimeout(() => {
     render().catch((error) => {
-      preview.innerHTML = `<pre class="error">${escapeHtml(error.message)}</pre>`;
+      showError(error.message);
     });
   }, 80);
 }
@@ -254,5 +267,5 @@ sourceToggleButton.addEventListener("click", () => {
 });
 
 render().catch((error) => {
-  preview.innerHTML = `<pre class="error">${escapeHtml(error.message)}</pre>`;
+  showError(error.message);
 });

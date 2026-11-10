@@ -16,14 +16,16 @@
 // as HEAD's — see abGuard.cjs and reference.json.
 
 const { execFileSync } = require("node:child_process");
-const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = require("node:fs");
+const { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } = require("node:fs");
 const { tmpdir } = require("node:os");
 const { join, dirname, relative, sep } = require("node:path");
 
 const MARKENGINE_ROOT = join(__dirname, "..");
 
+const GIT_BIN = process.platform === "win32" ? "git.exe" : (["/usr/bin/git", "/bin/git", "/usr/local/bin/git"].find(existsSync) || "/usr/bin/git");
+
 function git(args, cwd) {
-  return execFileSync("git", args, { cwd, encoding: "utf8" });
+  return execFileSync(GIT_BIN, args, { cwd, encoding: "utf8" });
 }
 
 function repoRoot() {

@@ -10,43 +10,41 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-const { join, resolve } = require("node:path");
-const vm = require("node:vm");
+const { join, resolve, basename } = require("node:path");
+const { mkdirSync, existsSync, renameSync } = require("node:fs");
 const esbuild = require("esbuild");
 const { Bench } = require("tinybench");
 
 const MARKENGINE_ROOT = resolve(__dirname, "..");
-const NODE_GLOBAL = {
-  TEXT_NODE: 3,
-  ELEMENT_NODE: 1,
-};
+const CACHE_DIR = join(MARKENGINE_ROOT, "node_modules/.cache/bench-modules");
+mkdirSync(CACHE_DIR, { recursive: true });
+
+const NODE_GLOBAL = { TEXT_NODE: 3, ELEMENT_NODE: 1 };
+globalThis.Node = globalThis.Node || NODE_GLOBAL;
 
 function loadModule(relativeEntryPoint, root = MARKENGINE_ROOT) {
-  const bundle = esbuild.buildSync({
-    entryPoints: [join(root, relativeEntryPoint)],
-    bundle: true,
-    platform: "node",
-    format: "cjs",
-    write: false,
-    tsconfig: join(root, "tsconfig.json"),
-  });
+  const fullPath = resolve(root, relativeEntryPoint);
+  if (!fullPath.startsWith(root)) {
+    throw new Error("Invalid entry point: path traversal detected");
+  }
+  const safeName = basename(relativeEntryPoint).replace(/[^a-zA-Z0-9_-]/g, "_");
+  const outfile = join(CACHE_DIR, `${safeName}.${process.pid}.cjs`);
 
-  const module = { exports: {} };
-  vm.runInNewContext(bundle.outputFiles[0].text, {
-    module,
-    exports: module.exports,
-    require,
-    Node: NODE_GLOBAL,
-    console,
-    process,
-    Buffer,
-    setTimeout,
-    clearTimeout,
-    queueMicrotask,
-    URL,
-    URLSearchParams,
-  });
-  return module.exports;
+  if (!existsSync(outfile)) {
+    const tmpFile = `${outfile}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`;
+    esbuild.buildSync({
+      entryPoints: [fullPath],
+      bundle: true,
+      platform: "node",
+      format: "cjs",
+      outfile: tmpFile,
+      tsconfig: join(root, "tsconfig.json"),
+    });
+    renameSync(tmpFile, outfile);
+  }
+
+  delete require.cache[require.resolve(outfile)];
+  return require(outfile);
 }
 
 function createMarkdownDocument(targetBytes) {

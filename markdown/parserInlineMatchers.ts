@@ -511,6 +511,19 @@ function skipCodeSpan(text: string, cursor: number): number {
   return close === -1 ? cursor + ticks : close + ticks;
 }
 
+const MAX_CACHED_EMPHASIS = 4;
+const failedOpenersCache = new Map<string, { star: Set<number>; underscore: Set<number> }>();
+
+function getFailedOpeners(text: string): { star: Set<number>; underscore: Set<number> } {
+  let entry = failedOpenersCache.get(text);
+  if (!entry) {
+    if (failedOpenersCache.size >= MAX_CACHED_EMPHASIS) failedOpenersCache.clear();
+    entry = { star: new Set(), underscore: new Set() };
+    failedOpenersCache.set(text, entry);
+  }
+  return entry;
+}
+
 function matchStackedEmphasis(
   text: string,
   pos: number,
@@ -526,6 +539,13 @@ function matchStackedEmphasis(
   if (isWhitespaceCode(text.charCodeAt(pos + openLen))) return null; // opener can't precede space
   if (!isStar && pos > 0 && isWordCode(text.charCodeAt(pos - 1))) return null; // no intraword _
 
+  const failedSet = isStar ? getFailedOpeners(text).star : getFailedOpeners(text).underscore;
+  if (failedSet.has(pos)) return null;
+  if (text.indexOf(marker, pos + openLen) === -1) {
+    failedSet.add(pos);
+    return null;
+  }
+
   // Zero-alloc fast path for the dominant single-close case; `extraSegments`
   // only materializes when a run closes in parts ("***a** b*").
   let firstContent: string | null = null;
@@ -536,6 +556,7 @@ function matchStackedEmphasis(
   let cursor = segStart;
   let matchEnd = -1;
   let depth = 0;
+  const openersSeen: number[] = [];
   // The next "\\" and "`" at or after `cursor`, rescanned only once `cursor` passes
   // them (`cursor` never moves back). Rescanning at every candidate made a run of
   // unclosed openers cubic: "*a "×10000 took 45831 ms, 754 ms cached (node 22).
@@ -572,6 +593,7 @@ function matchStackedEmphasis(
 
     if (canClose && cursor > segStart && depth > 0) {
       depth -= 1; // pairs with an inner opener; stays in the content
+      openersSeen.pop();
       cursor += runLen;
       continue;
     }
@@ -590,11 +612,20 @@ function matchStackedEmphasis(
       segStart = cursor;
       continue;
     }
-    if (canOpen) depth += 1;
+    if (canOpen) {
+      depth += 1;
+      openersSeen.push(cursor);
+    }
     cursor += runLen;
   }
 
-  if (firstContent === null || firstContent.length === 0) return null;
+  if (firstContent === null || firstContent.length === 0) {
+    failedSet.add(pos);
+    for (let i = 0; i < openersSeen.length; i++) {
+      failedSet.add(openersSeen[i]);
+    }
+    return null;
+  }
 
   let node = wrapEmphasis(marker, firstTake, parseInline(firstContent));
   let consumed = firstTake;

@@ -37,16 +37,30 @@ export function appendChar(nodes: InlineNode[], ch: string): void {
   }
 }
 
+const MAX_CACHED_BRACKETS = 4;
+const bracketCache = new Map<string, Map<number, number>>();
+
 export function findClosingBracket(text: string, openPos: number): number {
-  let depth = 0;
-  for (let i = openPos; i < text.length; i++) {
-    if (text[i] === '[') depth++;
-    else if (text[i] === ']') {
-      depth--;
-      if (depth === 0) return i;
+  if (text.indexOf(']', openPos) === -1) return -1;
+  let map = bracketCache.get(text);
+  if (!map) {
+    if (bracketCache.size >= MAX_CACHED_BRACKETS) bracketCache.clear();
+    map = new Map();
+    const stack: number[] = [];
+    const len = text.length;
+    for (let i = 0; i < len; i++) {
+      const code = text.charCodeAt(i);
+      if (code === 91) {
+        stack.push(i);
+      } else if (code === 93) {
+        if (stack.length > 0) {
+          map.set(stack.pop()!, i);
+        }
+      }
     }
+    bracketCache.set(text, map);
   }
-  return -1;
+  return map.get(openPos) ?? -1;
 }
 
 export function slugify(text: string): string {

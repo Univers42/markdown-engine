@@ -11,7 +11,7 @@
 /* ************************************************************************** */
 
 const { execFileSync } = require("node:child_process");
-const { writeFileSync } = require("node:fs");
+const { writeFileSync, existsSync } = require("node:fs");
 const { join } = require("node:path");
 const { runBenchmarks } = require("./benchmarks.cjs");
 const { compareToReference, loadReferenceConfig } = require("./abGuard.cjs");
@@ -31,7 +31,7 @@ function printTable(result) {
 }
 
 function pinReference() {
-  const gitBin = process.platform === "win32" ? "git.exe" : "/usr/bin/git";
+  const gitBin = process.platform === "win32" ? "git.exe" : (["/usr/bin/git", "/bin/git", "/usr/local/bin/git"].find(existsSync) || "/usr/bin/git");
   const headSha = execFileSync(gitBin, ["rev-parse", "HEAD"], {
     cwd: __dirname,
     encoding: "utf8",

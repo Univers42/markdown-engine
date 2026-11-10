@@ -22,3 +22,11 @@ for (const opener of ["*a ", "_a "]) {
     assert.ok(took < BUDGET_MS, `${JSON.stringify(opener)}×10000 took ${took} ms`);
   });
 }
+
+test(`"["×25000 parses inside ${BUDGET_MS} ms`, () => {
+  const source = "[".repeat(25000);
+  const started = performance.now();
+  E.parse(source);
+  const took = Math.round(performance.now() - started);
+  assert.ok(took < BUDGET_MS, `"["×25000 took ${took} ms`);
+});

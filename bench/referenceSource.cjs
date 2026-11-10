@@ -22,8 +22,10 @@ const { join, dirname, relative, sep } = require("node:path");
 
 const MARKENGINE_ROOT = join(__dirname, "..");
 
+const GIT_BIN = process.platform === "win32" ? "git.exe" : "/usr/bin/git";
+
 function git(args, cwd) {
-  return execFileSync("git", args, { cwd, encoding: "utf8" });
+  return execFileSync(GIT_BIN, args, { cwd, encoding: "utf8" });
 }
 
 function repoRoot() {

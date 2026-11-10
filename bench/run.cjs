@@ -31,7 +31,8 @@ function printTable(result) {
 }
 
 function pinReference() {
-  const headSha = execFileSync("git", ["rev-parse", "HEAD"], {
+  const gitBin = process.platform === "win32" ? "git.exe" : "/usr/bin/git";
+  const headSha = execFileSync(gitBin, ["rev-parse", "HEAD"], {
     cwd: __dirname,
     encoding: "utf8",
   }).trim();

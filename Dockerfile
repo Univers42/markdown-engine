@@ -23,15 +23,19 @@ RUN npm run build
 FROM deps AS prod
 WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/playground/public ./playground/public
-COPY --from=build /app/vite.config.ts ./vite.config.ts
+USER node
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/playground/public ./playground/public
+COPY --from=build --chown=node:node /app/vite.config.ts ./vite.config.ts
 EXPOSE 3000
 CMD ["npm", "run", "start"]
 
 FROM deps AS dev
 WORKDIR /app
-ENV NODE_ENV=development
-COPY . .
+USER node
+COPY --chown=node:node package.json package-lock.json tsconfig.json vite.config.ts markdown.ts renderCore.ts ./
+COPY --chown=node:node src ./src
+COPY --chown=node:node markdown ./markdown
+COPY --chown=node:node playground ./playground
 EXPOSE 3000
 CMD ["npm", "run", "dev"]

@@ -37,15 +37,35 @@ export function appendChar(nodes: InlineNode[], ch: string): void {
   }
 }
 
+// Per-parse memo: if a scan from `openPos` finds no `]` at all in the tail,
+// later openers cannot close either. Consecutive unclosed `[`×N used to be
+// quadratic (each opener re-scanned the remainder). One failed scan with no
+// `]` makes the rest O(1). Nested cases like "[[[a]" still re-scan because a
+// `]` exists that a later opener can pair with.
+let bracketScanText: string | null = null;
+let bracketNoCloseFrom = Infinity;
+
 export function findClosingBracket(text: string, openPos: number): number {
+  if (text !== bracketScanText) {
+    bracketScanText = text;
+    bracketNoCloseFrom = Infinity;
+  }
+  if (openPos >= bracketNoCloseFrom) return -1;
+
   let depth = 0;
+  let sawClose = false;
   for (let i = openPos; i < text.length; i++) {
-    if (text[i] === '[') depth++;
-    else if (text[i] === ']') {
+    const ch = text.charCodeAt(i);
+    if (ch === 91) depth++; // [
+    else if (ch === 93) {
+      // ]
+      sawClose = true;
       depth--;
       if (depth === 0) return i;
     }
   }
+  // Only safe to memoize when the tail has no `]` at all.
+  if (!sawClose) bracketNoCloseFrom = openPos;
   return -1;
 }
 

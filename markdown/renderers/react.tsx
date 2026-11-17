@@ -12,7 +12,7 @@
 
 // React renderer — AST to React elements
 import React from "react";
-import { isBlockNode, type BlockNode } from "../ast";
+import { isBlockNode, type BlockNode, type InlineNode } from "../ast";
 import { parse } from "../parser";
 import { renderTable, renderInlineNode, renderInlines } from "./reactHelpers";
 import { headingId, renderHtmlElement, type HtmlSubsetRenderOptions } from "./reactHtmlSubset";
@@ -26,15 +26,17 @@ import {
   type MarkdownViewMode,
 } from "./renderMode";
 
-/** Extract plain text from inline AST nodes (for stable React keys). */
-function extractInlineText(nodes: readonly Record<string, unknown>[]): string {
+/**
+ * Extract plain text from inline AST nodes (for stable React keys). Typed on
+ * InlineNode, not Record<string, unknown>: HtmlElementShape is an interface,
+ * which has no implicit index signature.
+ */
+function extractInlineText(nodes: readonly InlineNode[]): string {
   return nodes
     .map((n) => {
-      if (typeof n.value === "string") return n.value;
-      if (Array.isArray(n.children))
-        return extractInlineText(n.children as Record<string, unknown>[]);
-      if (typeof n.alt === "string") return n.alt;
-      return "";
+      if ("value" in n) return n.value;
+      if ("children" in n) return extractInlineText(n.children);
+      return n.type === "image" ? n.alt : "";
     })
     .join("");
 }

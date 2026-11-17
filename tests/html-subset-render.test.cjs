@@ -1,7 +1,8 @@
 "use strict";
 
-// U3-1/U3-3/U3-4/U3-7: what the React renderer does with html_element nodes and
-// with markdown images and links when the HTML subset is on.
+// U3-1/U3-3/U3-4/U3-7: what the React renderer (and the inline source serializer)
+// do with html_element nodes and with markdown images and links when the HTML
+// subset is on.
 const test = require("node:test");
 const assert = require("node:assert");
 const { loadMarkengine } = require("./support/loadMarkengine.cjs");
@@ -93,4 +94,14 @@ test("U3-4 no variable is ever expanded into a URL or an attribute", () => {
       assert.ok(!JSON.stringify(value ?? "").includes("S3CR3T"), `${String(element.type)}.${name}`);
     }
   }
+});
+
+// The inline source serializer (editor round-trip) keeps an element's text and
+// writes no tag back: it has no attribute escaping, so re-created markup is
+// exactly what the subset exists to prevent.
+test("serializeInlineNodes writes a subset element's children, never the element", () => {
+  const [paragraph] = E.parse('x <b title="t">bold</b> <a href="https://a.io/">link</a>', { htmlSubset: true });
+  assert.strictEqual(paragraph.type, "paragraph");
+  assert.ok(paragraph.children.some((node) => node.type === "html_element"));
+  assert.strictEqual(E.serializeInlineNodes(paragraph.children), "x bold link");
 });

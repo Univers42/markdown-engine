@@ -424,6 +424,8 @@ function serializeInlineNode(node: InlineNode): string {
       return node.value;
     case "variable":
       return `{{${node.expr}}}`;
+    case "html_element":
+      return serializeInlineNodes(node.children);
   }
 }
 

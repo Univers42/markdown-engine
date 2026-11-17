@@ -12,7 +12,7 @@
 
 // Markdown parser — inline formatting parser
 import type { InlineNode } from './ast';
-import type { InlineMatchResult, InlineMatcher } from './parserInlineTypes';
+import type { InlineMatchResult, InlineMatcher, InlineParser } from './parserInlineTypes';
 import { handleNewline, appendChar } from './parserInlineUtils';
 import { createInlineDispatch } from './parserInlineMatchers';
 import { matchHtmlSubsetAt } from './htmlSubset/inline';
@@ -57,50 +57,64 @@ function findTextRunEnd(text: string, pos: number): number {
   return cursor;
 }
 
-// One loop over locals, as before the subset: a per-step helper carrying a state
-// object measured 16-18% slower on the bench's mixed 10K paragraph (abGuard
-// "parse inline mixed 10K chars" -18.9% against 923924cc), with the subset off.
+// One parser per mode: the mode and its dispatch table live in the closure, and
+// the matchers recurse into that same parser, so a nested span (bold, link text,
+// a colour run) reads no module state. Bench mixed 10K paragraph, interleaved A/B
+// against 69f143b (before the subset): reading the session on every call 1.058
+// in the abGuard's vm realm; this shape 0.958-0.968 (same realm 0.958). A
+// per-step helper carrying a state object was 16-18% slower.
 export function parseInline(text: string): InlineNode[] {
-  if (!text) return [];
-  const root: InlineNode[] = [];
-  const html = isHtmlSubsetActive() ? inlineHtmlTree(root) : null;
-  let nodes = root;
-  let pos = 0;
-  const length = text.length;
-  while (pos < length) {
-    const code = text.charCodeAt(pos);
-    if (code === 10) {
-      handleNewline(nodes, text, pos);
-      pos++;
-      continue;
-    }
+  return isHtmlSubsetActive() ? parseHtmlInline(text) : parsePlainInline(text);
+}
 
-    if (code >= 128 || DISPATCH_CODES[code] === 0) {
-      const end = findTextRunEnd(text, pos);
-      appendTextRun(nodes, text.slice(pos, end));
-      pos = end;
-      continue;
-    }
+function createInlineParser(withHtml: boolean): InlineParser {
+  const dispatch = createInlineDispatch(parseText);
+  for (const key of Object.keys(dispatch)) DISPATCH_CODES[key.charCodeAt(0)] = 1;
 
-    if (code === 60 && html) {
-      pos = applyHtmlMatch(text, pos, nodes, html);
-      nodes = html.current();
-      continue;
-    }
-
-    const result = tryMatchInline(text, pos, INLINE_DISPATCH[text[pos]]);
-    if (result) {
-      if (result.start > pos) {
-        appendTextRun(nodes, text.slice(pos, result.start));
+  function parseText(text: string): InlineNode[] {
+    if (!text) return [];
+    const root: InlineNode[] = [];
+    const html = withHtml ? inlineHtmlTree(root) : null;
+    let nodes = root;
+    let pos = 0;
+    const length = text.length;
+    while (pos < length) {
+      const code = text.charCodeAt(pos);
+      if (code === 10) {
+        handleNewline(nodes, text, pos);
+        pos++;
+        continue;
       }
-      if (result.node) nodes.push(html ? withoutNestedAnchors(result.node) : result.node);
-      pos = result.end;
-    } else {
-      appendChar(nodes, text[pos]);
-      pos++;
+
+      if (code >= 128 || DISPATCH_CODES[code] === 0) {
+        const end = findTextRunEnd(text, pos);
+        appendTextRun(nodes, text.slice(pos, end));
+        pos = end;
+        continue;
+      }
+
+      if (code === 60 && html) {
+        pos = applyHtmlMatch(text, pos, nodes, html);
+        nodes = html.current();
+        continue;
+      }
+
+      const result = tryMatchInline(text, pos, dispatch[text[pos]]);
+      if (result) {
+        if (result.start > pos) {
+          appendTextRun(nodes, text.slice(pos, result.start));
+        }
+        if (result.node) nodes.push(html ? withoutNestedAnchors(result.node) : result.node);
+        pos = result.end;
+      } else {
+        appendChar(nodes, text[pos]);
+        pos++;
+      }
     }
+    return html ? html.finish() : root;
   }
-  return html ? html.finish() : root;
+
+  return parseText;
 }
 
 // With the subset on, "<" is a subset tag, a dropped element, an autolink or text.
@@ -118,10 +132,7 @@ function withoutNestedAnchors(node: InlineNode): InlineNode {
   return node;
 }
 
-const INLINE_DISPATCH: Record<string, InlineMatcher[]> = createInlineDispatch(parseInline);
-
 const DISPATCH_CODES = new Uint8Array(128);
-for (const key of Object.keys(INLINE_DISPATCH)) {
-  DISPATCH_CODES[key.charCodeAt(0)] = 1;
-}
+const parsePlainInline = createInlineParser(false);
+const parseHtmlInline = createInlineParser(true);
 

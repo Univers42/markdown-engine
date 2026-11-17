@@ -56,11 +56,15 @@ export class HtmlTreeBuilder<C extends HtmlChild> {
   private readonly stack: OpenElement<C>[] = [];
   private readonly depthBase = htmlDepthBase();
   private suppressedAnchors = 0;
+  // Plain fields, not parameter properties: the host's canvas suite loads engine
+  // .ts through node --experimental-strip-types, which rejects those.
+  private readonly root: C[];
+  private readonly kit: HtmlTreeKit<C>;
 
-  constructor(
-    private readonly root: C[],
-    private readonly kit: HtmlTreeKit<C>,
-  ) {}
+  constructor(root: C[], kit: HtmlTreeKit<C>) {
+    this.root = root;
+    this.kit = kit;
+  }
 
   current(): C[] {
     return this.stack.at(-1)?.children ?? this.root;

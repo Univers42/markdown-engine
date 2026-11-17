@@ -14,6 +14,7 @@
 import type { MarkEngineBlock as Block, MarkEngineBlockType as BlockType } from "../blockContract";
 import { createTableBlockFromData } from "../tableConfig";
 import type { BlockNode, InlineNode } from "./ast";
+import { closesFence, fenceRunAt, type FenceRun } from "./fence";
 import { parse } from "./parser";
 
 export type { BlockDetection } from "./shortcutsDetect";
@@ -69,15 +70,15 @@ function isSameLevel(line: string, prefix: string): boolean {
  */
 function fenceProtected(lines: string[]): boolean[] {
   const guarded: boolean[] = new Array<boolean>(lines.length).fill(false);
-  let fence: string | null = null;
+  let fence: FenceRun | null = null;
   let math = false;
   for (let index = 0; index < lines.length; index++) {
     const trimmed = (lines[index] ?? "").trimStart();
-    if (!fence && !math && (trimmed.startsWith("```") || trimmed.startsWith("~~~"))) {
-      fence = trimmed.slice(0, 3);
-      continue;
+    if (!fence && !math) {
+      fence = fenceRunAt(trimmed);
+      if (fence) continue;
     }
-    if (fence && trimmed.startsWith(fence)) {
+    if (fence && closesFence(trimmed, fence)) {
       fence = null;
       continue;
     }

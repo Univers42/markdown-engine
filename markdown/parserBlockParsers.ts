@@ -17,6 +17,7 @@ import type {
 import { parseInline } from './parserInline';
 import type { ParseContext } from './parserBlockContext';
 import { advance } from './parserBlockContext';
+import { closesFence } from './fence';
 
 export function isThematicBreak(line: string): boolean {
   // Single charCode pass (this runs on every block line): 3+ of one marker
@@ -53,16 +54,9 @@ export function parseFencedCode(ctx: ParseContext): BlockNode {
   const lines: string[] = [];
   while (ctx.pos < ctx.lines.length) {
     const line = ctx.lines[ctx.pos].trimStart();
-    // CommonMark: the closing fence uses the same char, is at least as long as
-    // the opener, and carries no info text — so a 4-backtick fence can show a
-    // 3-backtick block verbatim inside it.
-    if (line[0] === fenceChar) {
-      let closeLength = 0;
-      while (line[closeLength] === fenceChar) closeLength += 1;
-      if (closeLength >= fenceLength && line.slice(closeLength).trim() === '') {
-        advance(ctx);
-        break;
-      }
+    if (closesFence(line, { char: fenceChar, length: fenceLength })) {
+      advance(ctx);
+      break;
     }
     lines.push(advance(ctx));
   }

@@ -13,6 +13,7 @@
 // Markdown Parser — full CommonMark + GFM parser, zero dependencies
 
 import type { BlockNode, DefinitionItem } from "./ast";
+import { closesFence, fenceRunAt, type FenceRun } from "./fence";
 import { parseInline, slugify } from "./parserInline";
 import {
   setInlineRefDefinitions,
@@ -96,17 +97,15 @@ function collectRefDefinitions(lines: string[]): {
   definitions: Map<string, InlineRefDefinition>;
 } {
   const definitions = new Map<string, InlineRefDefinition>();
-  let fence: string | null = null;
+  let fence: FenceRun | null = null;
   for (const line of lines) {
     const trimmed = line.trimStart();
     if (fence) {
-      if (trimmed.startsWith(fence)) fence = null;
+      if (closesFence(trimmed, fence)) fence = null;
       continue;
     }
-    if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
-      fence = trimmed.slice(0, 3);
-      continue;
-    }
+    fence = fenceRunAt(trimmed);
+    if (fence) continue;
     if (trimmed[0] !== "[" || trimmed[1] === "^") continue;
     const match = REF_DEFINITION_RE.exec(line);
     if (!match) continue;
@@ -124,10 +123,8 @@ function collectRefDefinitions(lines: string[]): {
     if (!fence && trimmed[0] === "[" && trimmed[1] !== "^" && REF_DEFINITION_RE.test(line)) {
       continue;
     }
-    if (fence && trimmed.startsWith(fence)) fence = null;
-    else if (!fence && (trimmed.startsWith("```") || trimmed.startsWith("~~~"))) {
-      fence = trimmed.slice(0, 3);
-    }
+    if (fence && closesFence(trimmed, fence)) fence = null;
+    else if (!fence) fence = fenceRunAt(trimmed);
     kept.push(line);
   }
   return { lines: kept, definitions };

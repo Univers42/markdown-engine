@@ -14,8 +14,10 @@
 //
 //
 
-import type { BlockNode, InlineNode } from "../ast";
+import { isBlockNode, type BlockNode, type InlineNode } from "../ast";
+import { parseHtmlFragment } from "../htmlSubset/nest";
 import { renderInlineNodesToHtml } from "./inlineHtml";
+import { renderHtmlElementToHtml } from "./htmlSubset";
 import {
   resolveIndexedMarkdownMode,
   resolveMarkdownMode,
@@ -155,7 +157,11 @@ function renderBlock(
       return `<div class="${o.classPrefix}-math-block"${blockStateAttr}>${esc(node.value)}</div>`;
 
     case "html_block":
-      return o.sanitizeHtml ? `<!-- sanitized html block -->` : node.value;
+      return o.sanitizeHtml ? `<!-- sanitized html block -->` : renderChildBlocks(parseHtmlFragment(node.value), o, modeState);
+
+    case "html_element":
+      return renderHtmlElementToHtml(node, (child) =>
+        isBlockNode(child) ? renderBlock(child, o, modeState) : renderInlines([child], o), o.externalLinks);
 
     case "footnote_def": {
       const id = `fn-${esc(node.label)}`;

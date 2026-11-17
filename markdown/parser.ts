@@ -29,7 +29,7 @@ import {
   isSetextHeading,
   parseFencedCode,
   parseMathBlock,
-  isHtmlBlockTag,
+  startsHtmlBlock,
   parseHtmlBlock,
   isTableStart,
   parseTable,
@@ -46,9 +46,30 @@ import {
   parseToggle,
 } from "./parserBlockNested";
 
+import { nestHtmlBlocks } from "./htmlSubset/nest";
+import {
+  MAX_SUBSET_INPUT_BYTES,
+  exceedsUtf8Bytes,
+  isHtmlSubsetActive,
+  runInHtmlSubsetSession,
+} from "./htmlSubset/session";
+
 export { parseInline } from "./parserInline";
 
-export function parse(markdown: string): BlockNode[] {
+export interface RichParseOptions {
+  /** Parse GitHub's README HTML subset into html_element nodes (devil ruling U3). */
+  htmlSubset?: boolean;
+}
+
+// The subset parse refuses input over 200 KB whole (UTF-8 bytes): a partial
+// README would render as something its author never wrote.
+export function parse(markdown: string, options?: RichParseOptions): BlockNode[] {
+  if (!options?.htmlSubset) return parseDocument(markdown);
+  if (exceedsUtf8Bytes(markdown, MAX_SUBSET_INPUT_BYTES)) return [];
+  return runInHtmlSubsetSession(markdown.length, () => parseDocument(markdown));
+}
+
+function parseDocument(markdown: string): BlockNode[] {
   const allLines = markdown.split("\n");
   const frontMatter = parseFrontMatter(allLines);
   const { lines, definitions } = collectRefDefinitions(
@@ -251,14 +272,7 @@ function tryParsePrimaryBlock(
     if (trimmed.startsWith("$$")) return parseMathBlock(ctx);
     return null;
   }
-  if (first === "<") {
-    if (
-      /^<([a-zA-Z][a-zA-Z0-9-]*)[\s>/]/.test(trimmed) &&
-      isHtmlBlockTag(trimmed)
-    )
-      return parseHtmlBlock(ctx);
-    return null;
-  }
+  if (first === "<") return startsHtmlBlock(trimmed) ? parseHtmlBlock(ctx) : null;
   if (trimmed.includes("|") && isTableStart(ctx)) return parseTable(ctx);
   return null;
 }
@@ -329,16 +343,24 @@ function parseNextBlock(ctx: ParseContext, indent: number): BlockNode | null {
   );
 }
 
+/** One block, or null for a consumed blank/comment line. */
+function parseBlockStep(ctx: ParseContext, indent: number): BlockNode | null {
+  const before = ctx.pos;
+  const node = parseNextBlock(ctx, indent);
+  // Hard progress guarantee: no parser may return without consuming input.
+  // This can only trip on a parser bug — degrade to skipping one line
+  // instead of looping forever on it.
+  if (ctx.pos === before) advance(ctx);
+  return node;
+}
+
 function parseBlocks(ctx: ParseContext, indent: number): BlockNode[] {
+  const hasMore = (): boolean => ctx.pos < ctx.lines.length;
+  if (isHtmlSubsetActive()) return nestHtmlBlocks(hasMore, () => parseBlockStep(ctx, indent));
   const blocks: BlockNode[] = [];
-  while (ctx.pos < ctx.lines.length) {
-    const before = ctx.pos;
-    const node = parseNextBlock(ctx, indent);
+  while (hasMore()) {
+    const node = parseBlockStep(ctx, indent);
     if (node) blocks.push(node);
-    // Hard progress guarantee: no parser may return without consuming input.
-    // This can only trip on a parser bug — degrade to skipping one line
-    // instead of looping forever on it.
-    if (ctx.pos === before) advance(ctx);
   }
   return blocks;
 }

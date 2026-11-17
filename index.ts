@@ -23,6 +23,8 @@
 export type {
   BlockNode,
   DefinitionItem,
+  HtmlElementNode,
+  HtmlElementShape,
   InlineNode,
   ListItemNode,
   TableAlign,
@@ -73,9 +75,22 @@ export { parseInlineMarkdown } from "./markdown/inlineMarkdown";
  * import { parse, parseInline } from "markengine";
  * const blocks = parse("# Title");
  * const inline = parseInline("**bold**");
+ * const readme = parse("<p align=\"center\">hi</p>", { htmlSubset: true });
  * ```
  */
-export { parse, parseInline } from "./markdown/parser";
+export { parse, parseInline, type RichParseOptions } from "./markdown/parser";
+/**
+ * Image source policy for the README HTML subset: an absolute https: URL or
+ * a path under one of the given media prefixes, else "" (render no image).
+ *
+ * @example
+ * ```ts
+ * import { sanitizeImageSrc } from "markengine";
+ * sanitizeImageSrc("https://a.io/x.png", ["/api/media/uploads/"]); // "https://a.io/x.png"
+ * sanitizeImageSrc("data:image/png;base64,AA", []); // ""
+ * ```
+ */
+export { sanitizeImageSrc } from "./markdown/htmlSubset/imageSrc";
 /**
  * Rich AST HTML renderer.
  *

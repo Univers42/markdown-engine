@@ -20,8 +20,12 @@ import {
   shouldSuppressInlineBackground,
   unwrapCodeRichStyles,
 } from "./inlineStyleHelpers";
-import { isExternalUrl, sanitizeUrl } from "../../renderCore";
-import { isLinkMention, mentionFaviconSrc, mentionHost } from "../linkMention";
+import { sanitizeUrl } from "../../renderCore";
+import { isLinkMention, mentionHost } from "../linkMention";
+import {
+  REMOTE_IMAGE_PROPS, externalLinkProps, faviconSrc, renderHtmlElement, renderSubsetImage,
+  type HtmlSubsetRenderOptions,
+} from "./reactHtmlSubset";
 
 export interface ReactRenderHelperOptions {
   classPrefix: string;
@@ -35,6 +39,7 @@ export interface ReactRenderHelperOptions {
   ) => React.ReactElement;
   internalLinkRenderer?: (pageId: string) => React.ReactNode;
   variableRenderer?: (expr: string) => React.ReactNode;
+  htmlSubset?: HtmlSubsetRenderOptions;
 }
 
 export function renderTable(
@@ -219,13 +224,12 @@ export function renderInlineNode(
 
     case "link": {
       const href = sanitizeUrl(node.href);
-      const isExt = isExternalUrl(href);
       const isMention = isLinkMention(node.title);
       // See inlineHtml.ts renderLink: an unverifiable mention is plain text, not a chip.
       if (isMention && mentionHost(href) === "") {
         return React.createElement(React.Fragment, { key }, ...renderInlines(node.children, o));
       }
-      const favicon = isMention ? mentionFaviconSrc(href) : "";
+      const favicon = isMention ? faviconSrc(href, o.htmlSubset) : "";
       const props: Record<string, unknown> = {
         key,
         href: href || "#",
@@ -233,9 +237,7 @@ export function renderInlineNode(
         title: (isMention ? mentionHost(href) : node.title) || undefined,
         className: isMention ? "editor-link editor-link-mention" : "editor-link",
         ...(isMention ? { "data-link-mention": "true" } : {}),
-        ...(o.externalLinks && isExt
-          ? { target: "_blank", rel: "noopener noreferrer" }
-          : {}),
+        ...externalLinkProps(href, o.externalLinks),
       };
       const children = renderInlines(node.children, o);
       if (favicon) {
@@ -247,6 +249,7 @@ export function renderInlineNode(
             src: favicon,
             alt: "",
             loading: "lazy",
+            ...(o.htmlSubset ? REMOTE_IMAGE_PROPS : {}),
           }),
         );
       }
@@ -271,6 +274,7 @@ export function renderInlineNode(
       );
 
     case "image": {
+      if (o.htmlSubset) return renderSubsetImage(node, o.htmlSubset, key);
       const src = sanitizeUrl(node.src);
       if (!src) return null;
       if (o.imageRenderer) {
@@ -361,6 +365,9 @@ export function renderInlineNode(
         { key },
         o.variableRenderer ? o.variableRenderer(node.expr) : `{{${node.expr}}}`,
       );
+
+    case "html_element":
+      return renderHtmlElement(node, o, key, (child, i) => renderInlineNode(child, o, i));
 
     default:
       return null;

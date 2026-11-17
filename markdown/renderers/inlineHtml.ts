@@ -20,6 +20,7 @@ import {
 } from "./inlineStyleHelpers";
 import { escapeHtml, isExternalUrl, sanitizeUrl } from "../../renderCore";
 import { LINK_EDIT_TOOLTIP, isLinkMention, mentionFaviconSrc, mentionHost } from "../linkMention";
+import { renderHtmlElementToHtml } from "./htmlSubset";
 
 export interface InlineHtmlOptions {
   classPrefix?: string;
@@ -212,6 +213,8 @@ function renderInlineNodeToHtml(node: InlineNode, options: ResolvedInlineHtmlOpt
       return "<br />";
     case "footnote_ref":
       return `<sup>[${esc(node.label)}]</sup>`;
+    case "html_element":
+      return renderHtmlElementToHtml(node, (child) => renderInlineNodeToHtml(child, options), options.externalLinks);
     default:
       return "";
   }

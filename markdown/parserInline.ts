@@ -15,6 +15,9 @@ import type { InlineNode } from './ast';
 import type { InlineMatchResult, InlineMatcher } from './parserInlineTypes';
 import { handleNewline, appendChar } from './parserInlineUtils';
 import { createInlineDispatch } from './parserInlineMatchers';
+import { matchHtmlSubsetAt } from './htmlSubset/inline';
+import { isHtmlSubsetActive } from './htmlSubset/session';
+import { inlineHtmlTree, unwrapAnchors, type HtmlTreeBuilder } from './htmlSubset/tree';
 
 export { slugify } from './parserInlineUtils';
 
@@ -54,9 +57,14 @@ function findTextRunEnd(text: string, pos: number): number {
   return cursor;
 }
 
+// One loop over locals, as before the subset: a per-step helper carrying a state
+// object measured 16-18% slower on the bench's mixed 10K paragraph (abGuard
+// "parse inline mixed 10K chars" -18.9% against 923924cc), with the subset off.
 export function parseInline(text: string): InlineNode[] {
   if (!text) return [];
-  const nodes: InlineNode[] = [];
+  const root: InlineNode[] = [];
+  const html = isHtmlSubsetActive() ? inlineHtmlTree(root) : null;
+  let nodes = root;
   let pos = 0;
   const length = text.length;
   while (pos < length) {
@@ -74,19 +82,40 @@ export function parseInline(text: string): InlineNode[] {
       continue;
     }
 
+    if (code === 60 && html) {
+      pos = applyHtmlMatch(text, pos, nodes, html);
+      nodes = html.current();
+      continue;
+    }
+
     const result = tryMatchInline(text, pos, INLINE_DISPATCH[text[pos]]);
     if (result) {
       if (result.start > pos) {
         appendTextRun(nodes, text.slice(pos, result.start));
       }
-      if (result.node) nodes.push(result.node);
+      if (result.node) nodes.push(html ? withoutNestedAnchors(result.node) : result.node);
       pos = result.end;
     } else {
       appendChar(nodes, text[pos]);
       pos++;
     }
   }
-  return nodes;
+  return html ? html.finish() : root;
+}
+
+// With the subset on, "<" is a subset tag, a dropped element, an autolink or text.
+function applyHtmlMatch(text: string, pos: number, nodes: InlineNode[], html: HtmlTreeBuilder<InlineNode>): number {
+  const match = matchHtmlSubsetAt(text, pos);
+  if (match.start > pos) appendTextRun(nodes, text.slice(pos, match.start));
+  if (match.tag && !html.apply(match.tag)) appendTextRun(nodes, text.slice(pos, match.end));
+  if (match.node) nodes.push(match.node);
+  return match.end;
+}
+
+// A markdown link whose text holds an HTML <a> would nest anchors.
+function withoutNestedAnchors(node: InlineNode): InlineNode {
+  if (node.type === 'link') unwrapAnchors(node.children);
+  return node;
 }
 
 const INLINE_DISPATCH: Record<string, InlineMatcher[]> = createInlineDispatch(parseInline);

@@ -12,9 +12,10 @@
 
 // React renderer — AST to React elements
 import React from "react";
-import type { BlockNode } from "../ast";
+import { isBlockNode, type BlockNode } from "../ast";
 import { parse } from "../parser";
-import { renderTable, renderInlines } from "./reactHelpers";
+import { renderTable, renderInlineNode, renderInlines } from "./reactHelpers";
+import { headingId, renderHtmlElement, type HtmlSubsetRenderOptions } from "./reactHtmlSubset";
 import { kindClassName } from "../blockKind";
 export { renderInlines } from "./reactHelpers";
 import {
@@ -49,8 +50,9 @@ export interface ReactRenderOptions {
   resolveBlockMode?: MarkdownModeResolver<BlockNode>;
   /** Open external links in new tab (default: true) */
   externalLinks?: boolean;
-  /** Render raw HTML blocks. Disabled by default for safety. */
-  allowHtml?: boolean;
+  /** Render html_element nodes of a `parse(md, { htmlSubset: true })` AST (README
+   *  mode). Raw HTML is never injected: without this an HTML block is shown as code. */
+  htmlSubset?: HtmlSubsetRenderOptions;
   /** Custom code block renderer (for syntax highlighting integrations) */
   codeBlockRenderer?: (
     lang: string,
@@ -84,12 +86,12 @@ const defaults: Required<
     | "onTaskToggle"
     | "blockModes"
     | "resolveBlockMode"
+    | "htmlSubset"
   >
 > = {
   classPrefix: "md",
   mode: "reading",
   externalLinks: true,
-  allowHtml: false,
 };
 
 export function renderReact(
@@ -122,7 +124,7 @@ export function MarkdownView({
   blocks?: BlockNode[];
   className?: string;
 } & ReactRenderOptions) {
-  const ast = blocks ?? (markdown ? parse(markdown) : []);
+  const ast = blocks ?? (markdown ? parse(markdown, { htmlSubset: Boolean(opts.htmlSubset) }) : []);
   const elements = renderReact(ast, opts);
   const modeState = resolveMarkdownMode(opts.mode);
   return React.createElement(
@@ -163,7 +165,7 @@ function renderBlock(
       const tag = `h${node.level}`;
       return React.createElement(
         tag,
-        { key, id: node.id || undefined, "data-block-state": blockState },
+        { key, id: headingId(node.id, o.htmlSubset), "data-block-state": blockState },
         ...renderInlines(node.children, o),
       );
     }
@@ -318,18 +320,15 @@ function renderBlock(
     }
 
     case "html_block":
-      if (!o.allowHtml) {
-        return React.createElement(
-          "pre",
-          { key, "data-block-state": blockState },
-          React.createElement("code", null, node.value),
-        );
-      }
-      return React.createElement("div", {
-        key,
-        "data-block-state": blockState,
-        dangerouslySetInnerHTML: { __html: node.value },
-      });
+      return React.createElement(
+        "pre",
+        { key, "data-block-state": blockState },
+        React.createElement("code", null, node.value),
+      );
+
+    case "html_element":
+      return React.createElement(React.Fragment, { key }, renderHtmlElement(node, o, key, (child, i) =>
+        isBlockNode(child) ? renderBlock(child, o, modeState, i) : renderInlineNode(child, o, i)));
 
     case "footnote_def": {
       return React.createElement(

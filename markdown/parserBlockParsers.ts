@@ -18,6 +18,7 @@ import { parseInline } from './parserInline';
 import type { ParseContext } from './parserBlockContext';
 import { advance } from './parserBlockContext';
 import { closesFence } from './fence';
+import { isHtmlSubsetActive } from './htmlSubset/session';
 
 export function isThematicBreak(line: string): boolean {
   // Single charCode pass (this runs on every block line): 3+ of one marker
@@ -95,9 +96,17 @@ export const HTML_BLOCK_TAGS = new Set([
   // .xmd docs can embed images, video, and audio without a wrapping <div>.
   'video', 'audio', 'img', 'picture', 'embed', 'object', 'svg',
 ]);
-export function isHtmlBlockTag(line: string): boolean {
+function isHtmlBlockTag(line: string): boolean {
   const match = /^<\/?([a-zA-Z][a-zA-Z0-9-]*)/.exec(line);
   return match ? HTML_BLOCK_TAGS.has(match[1].toLowerCase()) : false;
+}
+
+// CommonMark HTML block start (type 6). A closing tag starts one only with the
+// subset on, so markdown between `<td>` and `</td>` nests; without it the legacy
+// rule stays as the parity suites pin it.
+export function startsHtmlBlock(trimmed: string): boolean {
+  const opener = isHtmlSubsetActive() ? /^<\/?[a-zA-Z][a-zA-Z0-9-]*(?:[\s>/]|$)/ : /^<[a-zA-Z][a-zA-Z0-9-]*[\s>/]/;
+  return opener.test(trimmed) && isHtmlBlockTag(trimmed);
 }
 
 export function parseHtmlBlock(ctx: ParseContext): BlockNode {
@@ -213,7 +222,7 @@ function isParagraphBreak(ctx: ParseContext, trimmed: string): boolean {
   if (/^\d{1,9}[.)]\s+/.test(trimmed)) return true;
   if (/^\[\^([^\]]+)\]:\s/.test(trimmed)) return true;
   if (isTableStart(ctx)) return true;
-  if (/^<([a-zA-Z])/.test(trimmed) && isHtmlBlockTag(trimmed)) return true;
+  if ((/^<([a-zA-Z])/.test(trimmed) || isHtmlSubsetActive()) && isHtmlBlockTag(trimmed)) return true;
   return false;
 }
 

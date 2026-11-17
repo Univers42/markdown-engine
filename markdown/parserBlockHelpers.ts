@@ -16,7 +16,7 @@ export { peek, advance } from './parserBlockContext';
 export {
   isThematicBreak, isSetextHeading,
   parseFencedCode, parseMathBlock,
-  HTML_BLOCK_TAGS, isHtmlBlockTag, parseHtmlBlock,
+  HTML_BLOCK_TAGS, parseHtmlBlock, startsHtmlBlock,
   listStartPattern, parseIndentedCode,
   isTableStart, parseTable,
   parseParagraph,

@@ -49,7 +49,20 @@ export type InlineNode =
   | { type: 'internal_link'; pageId: string }
   | { type: 'emoji'; value: string; raw: string }
   // `{{NAME | filter}}` — `expr` is the untrimmed inner text, so it round-trips byte-for-byte.
-  | { type: 'variable'; expr: string };
+  | { type: 'variable'; expr: string }
+  | HtmlElementShape<InlineNode>;
+
+// An allowlisted GitHub HTML element (parse option `htmlSubset`). Generic on the
+// child type because inline consumers recurse into `children` as InlineNode[];
+// a block-level element may also hold markdown blocks parsed inside it.
+export interface HtmlElementShape<Child> {
+  type: 'html_element';
+  tag: string;
+  attrs: Record<string, string>;
+  children: Child[];
+}
+
+export type HtmlElementNode = HtmlElementShape<BlockNode | InlineNode>;
 
 // ─── Block nodes (structural containers) ──────────────────────────────────────
 
@@ -72,7 +85,8 @@ export type BlockNode =
   | { type: 'definition_list'; items: DefinitionItem[] }
   | { type: 'toggle'; summary: InlineNode[]; children: BlockNode[]; level?: 1 | 2 | 3 | 4 | 5 | 6 }
   | { type: 'front_matter'; value: string }
-  | { type: 'container'; kind: string; params?: string; children: BlockNode[] };
+  | { type: 'container'; kind: string; params?: string; children: BlockNode[] }
+  | HtmlElementNode;
 
 export interface ListItemNode {
   type: 'list_item';
@@ -114,7 +128,7 @@ export function isInlineNode(node: unknown): node is InlineNode {
     'text_color', 'background_color', 'code_rich',
     'code', 'link', 'image', 'line_break', 'highlight',
     'subscript', 'superscript', 'kbd', 'spoiler', 'math_inline',
-    'footnote_ref', 'internal_link', 'emoji', 'variable',
+    'footnote_ref', 'internal_link', 'emoji', 'variable', 'html_element',
   ].includes(node.type);
 }
 
@@ -124,5 +138,6 @@ export function isBlockNode(node: unknown): node is BlockNode {
     'ordered_list', 'unordered_list', 'task_list', 'list_item',
     'thematic_break', 'table', 'callout', 'math_block', 'html_block',
     'footnote_def', 'definition_list', 'toggle', 'front_matter', 'container',
+    'html_element',
   ].includes(node.type);
 }

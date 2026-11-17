@@ -3,8 +3,9 @@
 // What no README may ever produce, checked on both outputs of the HTML subset:
 // the React element tree (stubbed createElement) and the renderHtml string.
 // Caveat: the string check reads tags with a regex over OUR serializer's output
-// (always name="value", values escaped). It is not an HTML5 parse; the host's
-// Chromium spec re-parses the real markup for that.
+// (always name="value", values escaped) and react-dom/server's, which the host's
+// canvas test feeds it. It is not an HTML5 parse: neither suite has an HTML5
+// parser installed, and adding one is a new dependency.
 
 const SUBSET_TAGS = (
   "div p span a img br hr sub sup b i em strong code pre kbd details summary " +

@@ -1,7 +1,7 @@
 "use strict";
 
 // The U3-5 corpus (devil ruling, classes a-h). Shared by the engine suite and the
-// host's Chromium spec so both outputs face the same inputs. A vector is
+// host's canvas test (real React) so both outputs face the same inputs. A vector is
 // [class, label, markdown]; the invariants live in htmlSubsetInvariants.cjs.
 
 const KB200 = 200 * 1024;

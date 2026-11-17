@@ -119,3 +119,50 @@ test("autoformat typing loop never throws and always terminates", () => {
     }
   }
 });
+
+// U3-5: the README subset under fuzz. Tag soup drawn from the corpus classes
+// (subset tags, dropped tags, handlers, hostile URLs, entities, markdown in HTML)
+// must never throw and must keep every invariant on both outputs.
+const { loadMarkengine } = require("./support/loadMarkengine.cjs");
+const {
+  MEDIA_PREFIXES, htmlElementDepth, htmlProblems, reactProblems,
+} = require("./support/htmlSubsetInvariants.cjs");
+
+const R = loadMarkengine("react.tsx");
+const HTML_FRAGMENTS = [
+  "<div align=center>", "</div>", "<p>", "</p>", "<table>", "</table>", "<tr>", "<td colspan=2>",
+  "</td>", "<th valign=top>", "<ul>", "<li>", "<h2>", "<blockquote>", "<pre>", "<code>", "<b>",
+  "</b>", "<kbd>", "<sub>", "<details>", "<summary>", "</summary>", "</details>", "<br/>", "<hr>",
+  '<a href="https://a.io">', '<a href="java&#x09;script:alert(1)">', "</a>", "<span>", "</span>",
+  '<img src="https://a.io/x.png" onerror=alert(1)>', "<img src=x>", "<IMG SRC=javascript:1>",
+  '<img src="/api/media/uploads/a.png" width=45%>', "<img/src/onerror=alert(1)>",
+  "<script>alert(1)</script>", "<svg onload=alert(1)>", "<style>", "</style>", "<iframe>",
+  "<noscript>", "<template>", "<!--", "-->", "--!>", "<![CDATA[", "]]>", "<?x", "<!DOCTYPE html>",
+  "&#106;avascript:", "&colon;", "&amp;", '"', "'", "<", ">", "=", "/", " on", "\n\n", "```",
+  "[x](javascript:1)", "![y](https://a.io/i.png)", "<javascript:alert(1)>", "{{secret}}",
+  "<div>".repeat(8), "<span>".repeat(8), "\n> ", "\n- ", "\n| a | b |\n|---|---|\n| <b>c</b> | d |",
+];
+
+function randomTagSoup(random) {
+  const parts = [];
+  const count = 1 + Math.floor(random() * 40);
+  for (let i = 0; i < count; i++) {
+    parts.push(HTML_FRAGMENTS[Math.floor(random() * HTML_FRAGMENTS.length)]);
+    parts.push(["", " ", "\n", "x"][Math.floor(random() * 4)]);
+  }
+  return parts.join("");
+}
+
+test("U3-5 the HTML subset keeps every invariant on 400 fuzzed documents", () => {
+  const random = createRandom(0x5afe4e7d);
+  for (let sample = 0; sample < 400; sample++) {
+    const source = randomTagSoup(random);
+    const label = `sample ${sample}: ${JSON.stringify(source)}`;
+    const blocks = E.parse(source, { htmlSubset: true });
+    const tree = R.renderReact(blocks, { htmlSubset: { mediaPrefixes: MEDIA_PREFIXES } });
+    assert.deepStrictEqual(reactProblems(tree), [], label);
+    assert.deepStrictEqual(htmlProblems(E.renderHtml(blocks)), [], label);
+    assert.deepStrictEqual(htmlProblems(E.renderHtml(E.parse(source))), [], `clipboard ${label}`);
+    assert.ok(htmlElementDepth(blocks) <= 16, label);
+  }
+});

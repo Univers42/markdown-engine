@@ -13,7 +13,7 @@
 // Markdown parser — inline formatting parser
 import type { InlineNode } from './ast';
 import type { InlineMatchResult, InlineMatcher, InlineParser } from './parserInlineTypes';
-import { handleNewline, appendChar } from './parserInlineUtils';
+import { handleNewline } from './parserInlineUtils';
 import { createInlineDispatch } from './parserInlineMatchers';
 import { matchHtmlSubsetAt } from './htmlSubset/inline';
 import { htmlDepthBase, isHtmlSubsetActive, setHtmlDepthBase } from './htmlSubset/session';
@@ -42,6 +42,10 @@ function appendTextRun(nodes: InlineNode[], value: string): void {
   } else {
     nodes.push({ type: 'text', value });
   }
+}
+
+function appendRun(nodes: InlineNode[], text: string, from: number, to: number): void {
+  if (to > from) appendTextRun(nodes, text.slice(from, to));
 }
 
 // Every dispatch first-char is ASCII, so a 128-slot table answers "can this
@@ -82,46 +86,50 @@ function createInlineParser(withHtml: boolean): InlineParser {
     }
   }
 
+  // Unmatched text since the last node is one run, appended as a single slice
+  // when a node, a newline or the end comes. A concatenation per unmatched
+  // character kept a chain of ~150,000 pieces alive for "[<x " x 51,200 (200 KB):
+  // with linear closer scans, copying it in each young-generation GC still made
+  // the parse 4.7x the 50 KB time (4.0-4.2x with --max-semi-space-size=64).
   function scanText(text: string): InlineNode[] {
     const root: InlineNode[] = [];
     const html = withHtml ? inlineHtmlTree(root) : null;
     let nodes = root;
     let pos = 0;
+    let runStart = 0;
     const length = text.length;
     while (pos < length) {
       const code = text.charCodeAt(pos);
       if (code === 10) {
+        appendRun(nodes, text, runStart, pos);
         handleNewline(nodes, text, pos);
-        pos++;
+        runStart = ++pos;
         continue;
       }
 
       if (code >= 128 || DISPATCH_CODES[code] === 0) {
-        const end = findTextRunEnd(text, pos);
-        appendTextRun(nodes, text.slice(pos, end));
-        pos = end;
+        pos = findTextRunEnd(text, pos);
         continue;
       }
 
       if (code === 60 && html) {
-        pos = applyHtmlMatch(text, pos, nodes, html);
+        appendRun(nodes, text, runStart, pos);
+        runStart = pos = applyHtmlMatch(text, pos, nodes, html);
         nodes = html.current();
         continue;
       }
 
       const matchers = dispatch[text[pos]];
       const result = html ? matchInsideHtml(text, pos, matchers, html) : tryMatchInline(text, pos, matchers);
-      if (result) {
-        if (result.start > pos) {
-          appendTextRun(nodes, text.slice(pos, result.start));
-        }
-        if (result.node) nodes.push(result.node);
-        pos = result.end;
-      } else {
-        appendChar(nodes, text[pos]);
+      if (!result) {
         pos++;
+        continue;
       }
+      appendRun(nodes, text, runStart, result.start);
+      if (result.node) nodes.push(result.node);
+      runStart = pos = result.end;
     }
+    appendRun(nodes, text, runStart, length);
     return html ? html.finish() : root;
   }
 

@@ -28,15 +28,6 @@ export function handleNewline(nodes: InlineNode[], text: string, pos: number): v
   }
 }
 
-export function appendChar(nodes: InlineNode[], ch: string): void {
-  const lastNode = nodes.at(-1);
-  if (lastNode?.type === 'text') {
-    lastNode.value += ch;
-  } else {
-    nodes.push({ type: 'text', value: ch });
-  }
-}
-
 const MAX_CACHED_BRACKETS = 4;
 const bracketCache = new Map<string, Map<number, number>>();
 

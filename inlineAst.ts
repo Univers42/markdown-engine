@@ -372,9 +372,12 @@ function areInlineNodeListReferencesEqual(
   );
 }
 
+const titleSuffix = (title: string | undefined): string => (title ? ` "${title}"` : "");
+
 function serializeInlineNode(node: InlineNode): string {
   switch (node.type) {
     case "text":
+    case "emoji":
       return node.value;
     case "bold":
       return `[b]${serializeInlineNodes(node.children)}[/b]`;
@@ -394,14 +397,10 @@ function serializeInlineNode(node: InlineNode): string {
       return `[code]${serializeInlineNodes(node.children)}[/code]`;
     case "code":
       return `\`${node.value}\``;
-    case "link": {
-      const title = node.title ? ` "${node.title}"` : "";
-      return `[${serializeInlineNodes(node.children)}](${node.href}${title})`;
-    }
-    case "image": {
-      const title = node.title ? ` "${node.title}"` : "";
-      return `![${node.alt}](${node.src}${title})`;
-    }
+    case "link":
+      return `[${serializeInlineNodes(node.children)}](${node.href}${titleSuffix(node.title)})`;
+    case "image":
+      return `![${node.alt}](${node.src}${titleSuffix(node.title)})`;
     case "internal_link":
       return `[[page:${node.pageId}]]`;
     case "line_break":
@@ -420,8 +419,6 @@ function serializeInlineNode(node: InlineNode): string {
       return `$${node.value}$`;
     case "footnote_ref":
       return `[^${node.label}]`;
-    case "emoji":
-      return node.value;
     case "variable":
       return `{{${node.expr}}}`;
     case "html_element":

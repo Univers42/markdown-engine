@@ -26,11 +26,8 @@ import {
   type MarkdownViewMode,
 } from "./renderMode";
 
-/**
- * Extract plain text from inline AST nodes (for stable React keys). Typed on
- * InlineNode, not Record<string, unknown>: HtmlElementShape is an interface,
- * which has no implicit index signature.
- */
+// Plain text of inline nodes, for stable React keys. Typed on InlineNode: an
+// interface (HtmlElementShape) has no implicit index signature for a Record.
 function extractInlineText(nodes: readonly InlineNode[]): string {
   return nodes
     .map((n) => {

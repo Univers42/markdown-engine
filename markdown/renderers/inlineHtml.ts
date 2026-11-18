@@ -203,14 +203,24 @@ function renderInlineNodeToHtml(node: InlineNode, options: ResolvedInlineHtmlOpt
       return `<kbd>${renderChildren(node.children, options)}</kbd>`;
     case "spoiler":
       return `<span class="${options.classPrefix}-spoiler" data-inline-type="spoiler">${renderChildren(node.children, options)}</span>`;
+    case "line_break":
+      return "<br />";
+    default:
+      return renderRareInlineNode(node, options);
+  }
+}
+
+// The node types prose rarely holds, kept off the main switch: grouping five
+// wrapper cases there instead made inline HTML 6.1% slower (paired A/B, 40
+// pairs, 2026-11-18); here only these types pay the second dispatch.
+function renderRareInlineNode(node: InlineNode, options: ResolvedInlineHtmlOptions): string {
+  switch (node.type) {
     case "math_inline":
       return renderInlineMath(node, options);
     case "emoji":
       return node.value;
     case "variable":
       return renderVariable(node, options);
-    case "line_break":
-      return "<br />";
     case "footnote_ref":
       return `<sup>[${esc(node.label)}]</sup>`;
     case "html_element":

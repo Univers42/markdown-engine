@@ -164,20 +164,16 @@ function renderBlock(
         isBlockNode(child) ? renderBlock(child, o, modeState) : renderInlines([child], o), o.externalLinks);
 
     case "footnote_def": {
-      const id = `fn-${esc(node.label)}`;
       const body = renderChildBlocks(node.children, o, modeState);
-      return `<div id="${id}" class="${o.classPrefix}-footnote"${blockStateAttr}>\n<sup>${esc(node.label)}</sup>\n${body}\n</div>`;
+      return `<div id="fn-${esc(node.label)}" class="${o.classPrefix}-footnote"${blockStateAttr}>\n<sup>${esc(node.label)}</sup>\n${body}\n</div>`;
     }
 
-    case "definition_list": {
-      const items = renderDefinitionItems(node.items, o);
-      return `<dl${blockStateAttr}>\n${items}\n</dl>`;
-    }
+    case "definition_list":
+      return `<dl${blockStateAttr}>\n${renderDefinitionItems(node.items, o)}\n</dl>`;
 
     case "toggle": {
       const summary = renderInlines(node.summary, o);
-      const body = renderChildBlocks(node.children, o, modeState);
-      return `<details${blockStateAttr}>\n<summary>${summary}</summary>\n${body}\n</details>`;
+      return `<details${blockStateAttr}>\n<summary>${summary}</summary>\n${renderChildBlocks(node.children, o, modeState)}\n</details>`;
     }
 
     case "container": {

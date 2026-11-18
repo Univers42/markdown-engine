@@ -2,21 +2,14 @@
 
 // Seeded fuzz: the engine must never throw, hang, or destabilize on arbitrary
 // input — delimiter soup, unclosed pairs, pathological runs. Deterministic
-// (same LCG as markengine.test.js) so a failure is a repro, not a flake.
+// (support/seededRandom.cjs) so a failure is a repro, not a flake.
 
 const test = require("node:test");
 const assert = require("node:assert");
 const { loadMarkengineAll } = require("./support/loadMarkengine.cjs");
+const { createRandom } = require("./support/seededRandom.cjs");
 
 const E = loadMarkengineAll();
-
-function createRandom(seed) {
-  let state = seed >>> 0;
-  return () => {
-    state = (state * 1664525 + 1013904223) >>> 0;
-    return state / 0x100000000;
-  };
-}
 
 const DELIMITER_SOUP = "**__~~^^||``==[]()<>!#-:$\\|*_~%{}\"'@ \n\ta1.z";
 const FRAGMENTS = [

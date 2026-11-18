@@ -12,6 +12,7 @@
 
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createRandom } from "./support/seededRandom.cjs";
 
 import {
   compileMarkdownToHtml,
@@ -104,14 +105,6 @@ test("supports incremental reparsing", () => {
   assert.ok(next.changedNodeIds[0]);
   assert.match(renderHtml(next.ast), /very fast/);
 });
-
-function createRandom(seed) {
-  let state = seed >>> 0;
-  return () => {
-    state = (state * 1664525 + 1013904223) >>> 0;
-    return state / 0x100000000;
-  };
-}
 
 function pick(random, values) {
   return values[Math.floor(random() * values.length)];

@@ -24,6 +24,7 @@ import {
   type MarkdownViewMode,
 } from "./renderMode";
 import { escapeHtml } from "../../renderCore";
+import { kindClassName } from "../blockKind";
 
 export interface HtmlRenderOptions {
   wrapperClass?: string;
@@ -142,7 +143,7 @@ function renderBlock(
       return renderTable(node, o, modeState);
 
     case "callout": {
-      const cls = `${o.classPrefix}-callout ${o.classPrefix}-callout-${node.kind}`;
+      const cls = esc(kindClassName(o.classPrefix, "callout", node.kind));
       const title = node.title.length
         ? `<div class="${o.classPrefix}-callout-title">${renderInlines(node.title, o)}</div>\n`
         : "";
@@ -174,7 +175,7 @@ function renderBlock(
     }
 
     case "container": {
-      const cls = `${o.classPrefix}-container ${o.classPrefix}-container-${esc(node.kind)}`;
+      const cls = esc(kindClassName(o.classPrefix, "container", node.kind));
       const params = node.params ? ` data-params="${esc(node.params)}"` : "";
       const body = renderChildBlocks(node.children, o, modeState);
       return `<div class="${cls}"${params}${blockStateAttr}>\n${body}\n</div>`;

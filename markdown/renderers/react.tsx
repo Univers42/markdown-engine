@@ -15,6 +15,7 @@ import React from "react";
 import type { BlockNode } from "../ast";
 import { parse } from "../parser";
 import { renderTable, renderInlines } from "./reactHelpers";
+import { kindClassName } from "../blockKind";
 export { renderInlines } from "./reactHelpers";
 import {
   resolveIndexedMarkdownMode,
@@ -281,7 +282,6 @@ function renderBlock(
       return renderTable(node, { ...o, blockState }, key);
 
     case "callout": {
-      const cls = `${o.classPrefix}-callout ${o.classPrefix}-callout-${node.kind}`;
       const title = node.title.length
         ? React.createElement(
             "div",
@@ -292,7 +292,7 @@ function renderBlock(
       const body = node.children.map((c, i) => renderBlock(c, o, modeState, i));
       return React.createElement(
         "div",
-        { key, className: cls, "data-block-state": blockState },
+        { key, className: kindClassName(o.classPrefix, "callout", node.kind), "data-block-state": blockState },
         title,
         ...body,
       );
@@ -388,7 +388,7 @@ function renderBlock(
         "div",
         {
           key,
-          className: `${o.classPrefix}-container ${o.classPrefix}-container-${node.kind}`,
+          className: kindClassName(o.classPrefix, "container", node.kind),
           "data-params": node.params || undefined,
           "data-block-state": blockState,
         },

@@ -20,6 +20,7 @@ import {
   type InlineRefDefinition,
 } from "./parserInlineMatchers";
 import type { ParseContext } from "./parserBlockHelpers";
+import { CONTAINER_OPEN_RE } from "./blockKind";
 import {
   peek,
   advance,
@@ -176,8 +177,6 @@ function skipHtmlCommentBlock(ctx: ParseContext): void {
     if (line.includes("-->")) return;
   }
 }
-
-const CONTAINER_OPEN_RE = /^:::\s*([A-Za-z][A-Za-z0-9_-]*)\s*(.*)$/;
 
 /**
  * Pandoc-style fenced div: `:::name [params]` … bare `:::` closes. Containers

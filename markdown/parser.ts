@@ -13,13 +13,9 @@
 // Markdown Parser — full CommonMark + GFM parser, zero dependencies
 
 import type { BlockNode, DefinitionItem } from "./ast";
-import { closesFence, fenceRunAt, type FenceRun } from "./fence";
 import { parseInline, slugify } from "./parserInline";
-import {
-  setInlineRefDefinitions,
-  normalizeRefLabel,
-  type InlineRefDefinition,
-} from "./parserInlineMatchers";
+import { setInlineRefDefinitions } from "./parserInlineMatchers";
+import { collectRefDefinitions } from "./refDefinitions";
 import type { ParseContext } from "./parserBlockHelpers";
 import { CONTAINER_OPEN_RE } from "./blockKind";
 import {
@@ -105,52 +101,6 @@ function parseFrontMatter(
     }
   }
   return null;
-}
-
-const REF_DEFINITION_RE =
-  /^ {0,3}\[([^\]]+)\]:\s*(\S+)(?:\s+(?:"([^"]*)"|'([^']*)'|\(([^)]*)\)))?\s*$/;
-
-/**
- * One fence-aware pre-pass: collect `[label]: url "title"` definitions and drop
- * those lines from the block stream (they render nothing). `[^label]:` stays —
- * that's a footnote. The `[//]: # (comment)` idiom is swallowed here for free.
- */
-function collectRefDefinitions(lines: string[]): {
-  lines: string[];
-  definitions: Map<string, InlineRefDefinition>;
-} {
-  const definitions = new Map<string, InlineRefDefinition>();
-  let fence: FenceRun | null = null;
-  for (const line of lines) {
-    const trimmed = line.trimStart();
-    if (fence) {
-      if (closesFence(trimmed, fence)) fence = null;
-      continue;
-    }
-    fence = fenceRunAt(trimmed);
-    if (fence) continue;
-    if (trimmed[0] !== "[" || trimmed[1] === "^") continue;
-    const match = REF_DEFINITION_RE.exec(line);
-    if (!match) continue;
-    const href = match[2].replace(/^<(.*)>$/, "$1");
-    const title = match[3] ?? match[4] ?? match[5];
-    const label = normalizeRefLabel(match[1]);
-    if (!definitions.has(label)) definitions.set(label, { href, title });
-  }
-  if (definitions.size === 0) return { lines, definitions };
-  // Second pass: drop the definition lines from the block stream.
-  const kept: string[] = [];
-  fence = null;
-  for (const line of lines) {
-    const trimmed = line.trimStart();
-    if (!fence && trimmed[0] === "[" && trimmed[1] !== "^" && REF_DEFINITION_RE.test(line)) {
-      continue;
-    }
-    if (fence && closesFence(trimmed, fence)) fence = null;
-    else if (!fence) fence = fenceRunAt(trimmed);
-    kept.push(line);
-  }
-  return { lines: kept, definitions };
 }
 
 const HEADING_CUSTOM_ID_RE = /\s*\{#([A-Za-z0-9_-]+)\}\s*$/;

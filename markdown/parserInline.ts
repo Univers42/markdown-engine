@@ -63,80 +63,87 @@ function findTextRunEnd(text: string, pos: number): number {
   return cursor;
 }
 
-// One parser per mode: the mode and its dispatch table live in the closure, and
-// the matchers recurse into that same parser, so a nested span (bold, link text,
-// a colour run) reads no module state. Bench mixed 10K paragraph, interleaved A/B
-// against 69f143b (before the subset): reading the session on every call 1.058
-// in the abGuard's vm realm; this shape 0.958-0.968 (same realm 0.958). A
-// per-step helper carrying a state object was 16-18% slower.
+// One parser per mode: the mode and its dispatch table are fixed when the
+// parser is made, and the matchers recurse into that same parser, so a nested
+// span (bold, link text, a colour run) reads no module state. Bench mixed 10K
+// paragraph, interleaved A/B against 69f143b (before the subset): reading the
+// session on every call 1.058 in the abGuard's vm realm; this shape 0.958-0.968.
 export function parseInline(text: string): InlineNode[] {
   return isHtmlSubsetActive() ? parseHtmlInline(text) : parsePlainInline(text);
 }
 
+type InlineMode = { readonly withHtml: boolean; dispatch: Record<string, InlineMatcher[]> };
+
 function createInlineParser(withHtml: boolean): InlineParser {
-  const dispatch = createInlineDispatch(parseText);
-  for (const key of Object.keys(dispatch)) DISPATCH_CODES[key.charCodeAt(0)] = 1;
-
-  function parseText(text: string): InlineNode[] {
-    if (!text) return [];
-    if (!enterNesting()) return [{ type: 'text', value: text }];
-    const outerScan = enterScan(text);
-    try {
-      return scanText(text);
-    } finally {
-      leaveScan(outerScan);
-      leaveNesting();
-    }
-  }
-
-  // Unmatched text since the last node is one run, appended as a single slice
-  // when a node, a newline or the end comes. A concatenation per unmatched
-  // character kept a chain of ~150,000 pieces alive for "[<x " x 51,200 (200 KB):
-  // with linear closer scans, copying it in each young-generation GC still made
-  // the parse 4.7x the 50 KB time (4.0-4.2x with --max-semi-space-size=64).
-  function scanText(text: string): InlineNode[] {
-    const root: InlineNode[] = [];
-    const html = withHtml ? inlineHtmlTree(root) : null;
-    let nodes = root;
-    let pos = 0;
-    let runStart = 0;
-    const length = text.length;
-    while (pos < length) {
-      const code = text.charCodeAt(pos);
-      if (code === 10) {
-        appendRun(nodes, text, runStart, pos);
-        handleNewline(nodes, text, pos);
-        runStart = ++pos;
-        continue;
-      }
-
-      if (code >= 128 || DISPATCH_CODES[code] === 0) {
-        pos = findTextRunEnd(text, pos);
-        continue;
-      }
-
-      if (code === 60 && html) {
-        appendRun(nodes, text, runStart, pos);
-        runStart = pos = applyHtmlMatch(text, pos, nodes, html);
-        nodes = html.current();
-        continue;
-      }
-
-      const matchers = dispatch[text[pos]];
-      const result = html ? matchInsideHtml(text, pos, matchers, html) : tryMatchInline(text, pos, matchers);
-      if (!result) {
-        pos++;
-        continue;
-      }
-      appendRun(nodes, text, runStart, result.start);
-      if (result.node) nodes.push(result.node);
-      runStart = pos = result.end;
-    }
-    appendRun(nodes, text, runStart, length);
-    return html ? html.finish() : root;
-  }
-
+  const mode: InlineMode = { withHtml, dispatch: {} };
+  const parseText = (text: string): InlineNode[] => parseInMode(text, mode);
+  mode.dispatch = createInlineDispatch(parseText);
+  for (const key of Object.keys(mode.dispatch)) DISPATCH_CODES[key.charCodeAt(0)] = 1;
   return parseText;
+}
+
+function parseInMode(text: string, mode: InlineMode): InlineNode[] {
+  if (!text) return [];
+  if (!enterNesting()) return [{ type: 'text', value: text }];
+  const outerScan = enterScan(text);
+  try {
+    return scanText(text, mode);
+  } finally {
+    leaveScan(outerScan);
+    leaveNesting();
+  }
+}
+
+// What one scan has built: the open node list and where the unmatched run began.
+// Unmatched text since the last node is one run, appended as a single slice
+// when a node, a newline or the end comes. A concatenation per unmatched
+// character kept a chain of ~150,000 pieces alive for "[<x " x 51,200 (200 KB):
+// with linear closer scans, copying it in each young-generation GC still made
+// the parse 4.7x the 50 KB time (4.0-4.2x with --max-semi-space-size=64).
+type InlineScan = { readonly text: string; nodes: InlineNode[]; runStart: number };
+
+// The position stays a local of the loop; the scan object is touched only when
+// a newline, a tag or a match ends a run.
+function scanText(text: string, mode: InlineMode): InlineNode[] {
+  const root: InlineNode[] = [];
+  const html = mode.withHtml ? inlineHtmlTree(root) : null;
+  const scan: InlineScan = { text, nodes: root, runStart: 0 };
+  let pos = 0;
+  while (pos < text.length) {
+    const code = text.charCodeAt(pos);
+    if (code === 10) pos = takeNewline(scan, pos);
+    else if (code >= 128 || DISPATCH_CODES[code] === 0) pos = findTextRunEnd(text, pos);
+    else if (code === 60 && html) pos = takeHtmlTag(scan, pos, html);
+    else pos = takeMatch(scan, pos, mode.dispatch[text[pos]], html);
+  }
+  appendRun(scan.nodes, text, scan.runStart, text.length);
+  return html ? html.finish() : root;
+}
+
+function takeNewline(scan: InlineScan, pos: number): number {
+  appendRun(scan.nodes, scan.text, scan.runStart, pos);
+  handleNewline(scan.nodes, scan.text, pos);
+  return (scan.runStart = pos + 1);
+}
+
+function takeHtmlTag(scan: InlineScan, pos: number, html: HtmlTreeBuilder<InlineNode>): number {
+  appendRun(scan.nodes, scan.text, scan.runStart, pos);
+  scan.runStart = applyHtmlMatch(scan.text, pos, scan.nodes, html);
+  scan.nodes = html.current();
+  return scan.runStart;
+}
+
+function takeMatch(
+  scan: InlineScan,
+  pos: number,
+  matchers: InlineMatcher[],
+  html: HtmlTreeBuilder<InlineNode> | null,
+): number {
+  const result = html ? matchInsideHtml(scan.text, pos, matchers, html) : tryMatchInline(scan.text, pos, matchers);
+  if (!result) return pos + 1;
+  appendRun(scan.nodes, scan.text, scan.runStart, result.start);
+  if (result.node) scan.nodes.push(result.node);
+  return (scan.runStart = result.end);
 }
 
 // With the subset on, "<" is a subset tag, a dropped element, an autolink or text.

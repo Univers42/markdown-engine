@@ -80,6 +80,17 @@ test("heading ids are prefixed so a README cannot clobber window globals", () =>
   assert.strictEqual(plainHeading.props.id, "config", "outside the subset nothing changes");
 });
 
+test("footnote ids and their links are prefixed like heading ids", () => {
+  const markdown = "See[^name].\n\n[^name]: The note.";
+  const footnote = (tree) => collectElements(tree).find((element) => element.props?.id?.endsWith("fn-name"));
+  const link = (tree) => elementsOfType(tree, "a").find((element) => element.props.href?.endsWith("fn-name"));
+  assert.strictEqual(footnote(render(markdown)).props.id, "user-content-fn-name");
+  assert.strictEqual(link(render(markdown)).props.href, "#user-content-fn-name");
+  const plainTree = R.renderReact(E.parse(markdown));
+  assert.strictEqual(footnote(plainTree).props.id, "fn-name", "outside the subset nothing changes");
+  assert.strictEqual(link(plainTree).props.href, "#fn-name");
+});
+
 test("U3-4 no variable is ever expanded into a URL or an attribute", () => {
   const markdown = [
     '<img src="https://a.io/{{secret}}.png" alt="{{secret}}" title="{{secret}}">',

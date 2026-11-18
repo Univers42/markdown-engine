@@ -23,7 +23,7 @@ import {
 import { sanitizeUrl } from "../../renderCore";
 import { isLinkMention, mentionHost } from "../linkMention";
 import {
-  REMOTE_IMAGE_PROPS, externalLinkProps, faviconSrc, renderHtmlElement, renderSubsetImage,
+  REMOTE_IMAGE_PROPS, externalLinkProps, faviconSrc, renderHtmlElement, renderSubsetImage, userContentId,
   type HtmlSubsetRenderOptions,
 } from "./reactHtmlSubset";
 
@@ -347,7 +347,7 @@ export function renderInlineNode(
         { key },
         React.createElement(
           "a",
-          { href: `#fn-${node.label}` },
+          { href: `#${userContentId(`fn-${node.label}`, o.htmlSubset)}` },
           `[${node.label}]`,
         ),
       );

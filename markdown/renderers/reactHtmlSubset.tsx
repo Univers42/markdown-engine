@@ -45,9 +45,9 @@ export function externalLinkProps(href: string, externalLinks: boolean): Record<
   return externalLinks && isExternalUrl(href) ? { target: "_blank", rel: "noopener noreferrer" } : {};
 }
 
-// README mode prefixes heading ids as GitHub does, so `# config` cannot shadow
-// a `window.config` global through named element access.
-export function headingId(id: string | undefined, htmlSubset: HtmlSubsetRenderOptions | undefined): string | undefined {
+// README mode prefixes heading and footnote ids as GitHub does, so `# config`
+// cannot shadow a `window.config` global through named element access.
+export function userContentId(id: string | undefined, htmlSubset: HtmlSubsetRenderOptions | undefined): string | undefined {
   if (!id) return undefined;
   return htmlSubset ? `user-content-${id}` : id;
 }

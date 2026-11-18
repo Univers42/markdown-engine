@@ -15,7 +15,7 @@ import React from "react";
 import { isBlockNode, type BlockNode, type InlineNode } from "../ast";
 import { parse } from "../parser";
 import { renderTable, renderInlineNode, renderInlines } from "./reactHelpers";
-import { headingId, renderHtmlElement, type HtmlSubsetRenderOptions } from "./reactHtmlSubset";
+import { renderHtmlElement, userContentId, type HtmlSubsetRenderOptions } from "./reactHtmlSubset";
 import { kindClassName } from "../blockKind";
 export { renderInlines } from "./reactHelpers";
 import {
@@ -167,7 +167,7 @@ function renderBlock(
       const tag = `h${node.level}`;
       return React.createElement(
         tag,
-        { key, id: headingId(node.id, o.htmlSubset), "data-block-state": blockState },
+        { key, id: userContentId(node.id, o.htmlSubset), "data-block-state": blockState },
         ...renderInlines(node.children, o),
       );
     }
@@ -337,7 +337,7 @@ function renderBlock(
         "div",
         {
           key,
-          id: `fn-${node.label}`,
+          id: userContentId(`fn-${node.label}`, o.htmlSubset),
           className: `${o.classPrefix}-footnote`,
           "data-block-state": blockState,
         },

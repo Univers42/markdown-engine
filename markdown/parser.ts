@@ -46,6 +46,8 @@ import {
   parseToggle,
 } from "./parserBlockNested";
 
+import { restAsSourceText } from "./parserBlockContext";
+import { enterNesting, leaveNesting } from "./nestingDepth";
 import { nestHtmlBlocks } from "./htmlSubset/nest";
 import {
   MAX_SUBSET_INPUT_BYTES,
@@ -355,6 +357,15 @@ function parseBlockStep(ctx: ParseContext, indent: number): BlockNode | null {
 }
 
 function parseBlocks(ctx: ParseContext, indent: number): BlockNode[] {
+  if (!enterNesting()) return restAsSourceText(ctx);
+  try {
+    return parseBlockRun(ctx, indent);
+  } finally {
+    leaveNesting();
+  }
+}
+
+function parseBlockRun(ctx: ParseContext, indent: number): BlockNode[] {
   const hasMore = (): boolean => ctx.pos < ctx.lines.length;
   if (isHtmlSubsetActive()) return nestHtmlBlocks(hasMore, () => parseBlockStep(ctx, indent));
   const blocks: BlockNode[] = [];

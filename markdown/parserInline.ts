@@ -18,6 +18,7 @@ import { createInlineDispatch } from './parserInlineMatchers';
 import { matchHtmlSubsetAt } from './htmlSubset/inline';
 import { htmlDepthBase, isHtmlSubsetActive, setHtmlDepthBase } from './htmlSubset/session';
 import { inlineHtmlTree, unwrapAnchors, type HtmlTreeBuilder } from './htmlSubset/tree';
+import { enterNesting, leaveNesting } from './nestingDepth';
 
 export { slugify } from './parserInlineUtils';
 
@@ -73,6 +74,15 @@ function createInlineParser(withHtml: boolean): InlineParser {
 
   function parseText(text: string): InlineNode[] {
     if (!text) return [];
+    if (!enterNesting()) return [{ type: 'text', value: text }];
+    try {
+      return scanText(text);
+    } finally {
+      leaveNesting();
+    }
+  }
+
+  function scanText(text: string): InlineNode[] {
     const root: InlineNode[] = [];
     const html = withHtml ? inlineHtmlTree(root) : null;
     let nodes = root;

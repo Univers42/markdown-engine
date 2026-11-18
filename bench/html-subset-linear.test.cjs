@@ -76,7 +76,8 @@ function repeatToBytes(unit, bytes) {
   return unit.repeat(Math.max(copies, 1));
 }
 
-function renderOnce(source) {
+function renderOnce(source, htmlSubset = true) {
+  if (!htmlSubset) return void R.renderReact(E.parse(source));
   R.renderReact(E.parse(source, { htmlSubset: true }), { htmlSubset: { mediaPrefixes: [] } });
 }
 
@@ -107,5 +108,18 @@ for (const [name, unit] of Object.entries(INPUTS)) {
     t.diagnostic(`${name}: 50 KB ${smallMs.toFixed(2)} ms, 200 KB ${largeMs.toFixed(2)} ms, ratio ${ratio.toFixed(2)}`);
     assert.ok(largeMs < BUDGET_MS, `${name}: 200 KB took ${largeMs.toFixed(1)} ms`);
     assert.ok(ratio <= MAX_RATIO, `${name}: 200 KB / 50 KB = ${ratio.toFixed(2)}`);
+  });
+}
+
+// Both overflowed the call stack (RangeError) before the nesting budget; the
+// colour run took 160-178 s to get there (logs/shapes-rebased.log, 2026-11-18).
+const DEEP_INPUTS = {
+  "quote x2000 (4 KB)": "> ".repeat(2000) + "x",
+  "colour x5000": "[color=red]".repeat(5000) + "x" + "[/color]".repeat(5000),
+};
+
+for (const [name, source] of Object.entries(DEEP_INPUTS)) {
+  test(`U3-6 ${name} parses and renders without throwing`, () => {
+    for (const htmlSubset of [false, true]) renderOnce(source, htmlSubset);
   });
 }

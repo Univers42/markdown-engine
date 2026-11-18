@@ -142,8 +142,9 @@ const SPAN_SHAPES = {
   "quote nest": (bytes) => "> ".repeat(Math.floor((bytes - 1) / 2)) + "x",
   // Found after the review by the same probe: 14.3-16.0 at 200 KB / 50 KB, the
   // half-closed nests 12 s (colour) and 88 s (underline). With each closer
-  // answer kept for the scan, 3 runs: 4.11-4.49, the subset run of inline tags
-  // 4.60-5.24 (the refused tags' text is appended one tag at a time).
+  // answer kept for the scan, and a refused tag left in the text run, 3 runs:
+  // 3.78-4.47 (the subset run of inline tags was 4.60-5.24 while each refused
+  // tag's text was appended on its own).
   "colour nest, half closed": (bytes) => {
     const depth = Math.floor((bytes - 1) / 15);
     return "[color=red]".repeat(depth) + "x" + "[/color]".repeat(depth >> 1);

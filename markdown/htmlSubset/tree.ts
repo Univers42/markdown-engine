@@ -22,6 +22,9 @@ interface OpenElement<C> {
 interface HtmlTreeKit<C extends HtmlChild> {
   readonly inline: boolean;
   wrap(element: HtmlElementShape<C>): C;
+  // Called right before an element is added or closed, so a caller holding
+  // text read before the tag can put it in first.
+  readonly beforeChange?: () => void;
 }
 
 const HEADING_LIST = [...HEADINGS];
@@ -141,6 +144,7 @@ export class HtmlTreeBuilder<C extends HtmlChild> {
   }
 
   private push(tag: string, attrs: Record<string, string>): void {
+    this.kit.beforeChange?.();
     const children: C[] = [];
     this.current().push(this.kit.wrap({ type: "html_element", tag, attrs, children }));
     if (!VOID_TAGS.has(tag)) this.stack.push({ tag, children });
@@ -161,6 +165,7 @@ export class HtmlTreeBuilder<C extends HtmlChild> {
   }
 
   private popTo(index: number): void {
+    if (this.stack.length > index) this.kit.beforeChange?.();
     while (this.stack.length > index) {
       const element = this.stack.pop();
       if (element?.tag === "a") unwrapAnchors(element.children);
@@ -172,8 +177,8 @@ export class HtmlTreeBuilder<C extends HtmlChild> {
   }
 }
 
-export function inlineHtmlTree(root: InlineNode[]): HtmlTreeBuilder<InlineNode> {
-  return new HtmlTreeBuilder(root, { inline: true, wrap: (element) => element });
+export function inlineHtmlTree(root: InlineNode[], beforeChange?: () => void): HtmlTreeBuilder<InlineNode> {
+  return new HtmlTreeBuilder(root, { inline: true, wrap: (element) => element, beforeChange });
 }
 
 export function blockHtmlTree(root: HtmlChild[]): HtmlTreeBuilder<HtmlChild> {

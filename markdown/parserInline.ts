@@ -16,6 +16,7 @@ import type { InlineMatchResult, InlineMatcher, InlineParser } from './parserInl
 import { handleNewline } from './parserInlineUtils';
 import { createInlineDispatch } from './parserInlineMatchers';
 import { matchHtmlSubsetAt } from './htmlSubset/inline';
+import type { HtmlTagToken } from './htmlSubset/tokenizer';
 import { htmlDepthBase, isHtmlSubsetActive, setHtmlDepthBase } from './htmlSubset/session';
 import { inlineHtmlTree, unwrapAnchors, type HtmlTreeBuilder } from './htmlSubset/tree';
 import { enterNesting, leaveNesting } from './nestingDepth';
@@ -100,14 +101,20 @@ function parseInMode(text: string, mode: InlineMode): InlineNode[] {
 // character kept a chain of ~150,000 pieces alive for "[<x " x 51,200 (200 KB):
 // with linear closer scans, copying it in each young-generation GC still made
 // the parse 4.7x the 50 KB time (4.0-4.2x with --max-semi-space-size=64).
-type InlineScan = { readonly text: string; nodes: InlineNode[]; runStart: number };
+type InlineScan = {
+  readonly text: string;
+  nodes: InlineNode[];
+  runStart: number;
+  tagStart: number;
+  treeChanged: boolean;
+};
 
 // The position stays a local of the loop; the scan object is touched only when
 // a newline, a tag or a match ends a run.
 function scanText(text: string, mode: InlineMode): InlineNode[] {
   const root: InlineNode[] = [];
-  const html = mode.withHtml ? inlineHtmlTree(root) : null;
-  const scan: InlineScan = { text, nodes: root, runStart: 0 };
+  const scan: InlineScan = { text, nodes: root, runStart: 0, tagStart: 0, treeChanged: false };
+  const html = mode.withHtml ? inlineHtmlTree(root, () => flushBeforeTag(scan)) : null;
   let pos = 0;
   while (pos < text.length) {
     const code = text.charCodeAt(pos);
@@ -117,6 +124,8 @@ function scanText(text: string, mode: InlineMode): InlineNode[] {
     else pos = takeMatch(scan, pos, mode.dispatch[text[pos]], html);
   }
   appendRun(scan.nodes, text, scan.runStart, text.length);
+  // finish() closes the open elements through the flush hook: nothing is left to flush.
+  scan.runStart = scan.tagStart = text.length;
   return html ? html.finish() : root;
 }
 
@@ -126,11 +135,37 @@ function takeNewline(scan: InlineScan, pos: number): number {
   return (scan.runStart = pos + 1);
 }
 
+// With the subset on, "<" is a subset tag, a dropped element, an autolink or text.
 function takeHtmlTag(scan: InlineScan, pos: number, html: HtmlTreeBuilder<InlineNode>): number {
+  const match = matchHtmlSubsetAt(scan.text, pos);
+  if (match.tag) return takeSubsetTag(scan, pos, match.tag, html);
+  if (match.start > pos) return match.end; // "<" or an unknown tag reads as text: the run goes on
   appendRun(scan.nodes, scan.text, scan.runStart, pos);
-  scan.runStart = applyHtmlMatch(scan.text, pos, scan.nodes, html);
+  if (match.node) scan.nodes.push(match.node);
+  return (scan.runStart = match.end);
+}
+
+// A tag the tree refuses (past a cap) without changing anything is text, so it
+// stays in the run. Appended on its own, one "<b>" at a time past the depth cap,
+// it built a string of ~63,000 pieces that young-generation GC kept copying:
+// "<b>" x 68,266 parsed in 5.05x the 50 KB time (3.78x with a 64 MB semi-space).
+function takeSubsetTag(scan: InlineScan, pos: number, tag: HtmlTagToken, html: HtmlTreeBuilder<InlineNode>): number {
+  scan.tagStart = pos;
+  scan.treeChanged = false;
+  const applied = html.apply(tag);
+  if (!applied && !scan.treeChanged) return tag.end;
+  appendRun(scan.nodes, scan.text, scan.runStart, applied ? pos : tag.end);
+  scan.runStart = tag.end;
   scan.nodes = html.current();
-  return scan.runStart;
+  return tag.end;
+}
+
+// The tree is about to change around the tag at tagStart: the text read before
+// it goes in first, into the list it was read in.
+function flushBeforeTag(scan: InlineScan): void {
+  appendRun(scan.nodes, scan.text, scan.runStart, scan.tagStart);
+  scan.runStart = scan.tagStart;
+  scan.treeChanged = true;
 }
 
 function takeMatch(
@@ -144,15 +179,6 @@ function takeMatch(
   appendRun(scan.nodes, scan.text, scan.runStart, result.start);
   if (result.node) scan.nodes.push(result.node);
   return (scan.runStart = result.end);
-}
-
-// With the subset on, "<" is a subset tag, a dropped element, an autolink or text.
-function applyHtmlMatch(text: string, pos: number, nodes: InlineNode[], html: HtmlTreeBuilder<InlineNode>): number {
-  const match = matchHtmlSubsetAt(text, pos);
-  if (match.start > pos) appendTextRun(nodes, text.slice(pos, match.start));
-  if (match.tag && !html.apply(match.tag)) appendTextRun(nodes, text.slice(pos, match.end));
-  if (match.node) nodes.push(match.node);
-  return match.end;
 }
 
 // A matched span (bold, link text, a colour run) parses its content with a new

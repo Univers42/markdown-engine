@@ -52,3 +52,33 @@ for (const [mode, options] of Object.entries(MODES)) {
     assert.deepStrictEqual(leaf, { type: "text", value: "[color=red]".repeat(rest) + "x" + "[/color]".repeat(rest) });
   });
 }
+
+// ADR 0062 NC-1: the counter on its own. This bundle of nestingDepth.ts is its
+// own module, so no parser moves the counter it tests.
+test("the budget lets 32 levels in, refuses the 33rd, and is whole again after 32 leaves", () => {
+  const { enterNesting, leaveNesting } = loadMarkengine("markdown/nestingDepth.ts");
+  const enterAll = () => Array.from({ length: 33 }, () => enterNesting());
+  const leaveAll = () => Array.from({ length: 32 }, () => leaveNesting());
+  assert.strictEqual(MAX_NESTING_DEPTH, 32);
+  assert.deepStrictEqual(enterAll(), [...Array(32).fill(true), false]);
+  leaveAll();
+  assert.deepStrictEqual(enterAll(), [...Array(32).fill(true), false], "after 32 leaves the budget is whole");
+  leaveAll();
+});
+
+// ADR 0062 NC-2: a parse that hits the budget hands all of it back. FRESH is a
+// second bundle of the same entry ("./index.ts" is another cache key) that never
+// parses past the budget.
+for (const [mode, options] of Object.entries(MODES)) {
+  test(`${mode}: the budget does not leak from a capped parse into the next one`, () => {
+    const FRESH = loadMarkengine("./index.ts");
+    const document = "> ".repeat(MAX_NESTING_DEPTH - 1) + "# x";
+    E.parse("> ".repeat(2000) + "x", options);
+    const after = E.parse(document, options);
+    assert.deepStrictEqual(after, FRESH.parse(document, options));
+    // The innermost quote's content is the budget's last level: one level leaked
+    // would keep "# x" as source text instead of a heading.
+    const { types, leaf } = firstChildChain(after[0]);
+    assert.deepStrictEqual([count(types, "blockquote"), types.at(-1), leaf], [MAX_NESTING_DEPTH - 1, "heading", { type: "text", value: "x" }]);
+  });
+}

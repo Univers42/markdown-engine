@@ -74,19 +74,16 @@ function fenceProtected(lines: string[]): boolean[] {
   let math = false;
   for (let index = 0; index < lines.length; index++) {
     const trimmed = (lines[index] ?? "").trimStart();
-    if (!fence && !math) {
-      fence = fenceRunAt(trimmed);
-      if (fence) continue;
-    }
-    if (fence && closesFence(trimmed, fence)) {
-      fence = null;
-      continue;
-    }
-    if (!fence && (lines[index] ?? "").trim() === "$$") {
+    if (fence) {
+      if (closesFence(trimmed, fence)) fence = null;
+      else guarded[index] = true;
+    } else if (trimmed.trimEnd() === "$$") {
       math = !math;
-      continue;
+    } else if (math) {
+      guarded[index] = true;
+    } else {
+      fence = fenceRunAt(trimmed);
     }
-    if (fence || math) guarded[index] = true;
   }
   return guarded;
 }

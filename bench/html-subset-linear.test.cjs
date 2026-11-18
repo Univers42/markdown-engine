@@ -81,34 +81,74 @@ function renderOnce(source, htmlSubset = true) {
   R.renderReact(E.parse(source, { htmlSubset: true }), { htmlSubset: { mediaPrefixes: [] } });
 }
 
-function batchMs(source, batch) {
+// An editor hands the parser a new string per keystroke: every render gets its
+// own equal-content copy, so a cache keyed by content cannot time a hit.
+const freshCopy = (source) => Buffer.from(source, "utf8").toString("utf8");
+
+function batchMs(source, batch, htmlSubset) {
+  const copies = Array.from({ length: batch }, () => freshCopy(source));
   const started = performance.now();
-  for (let index = 0; index < batch; index++) renderOnce(source);
+  for (const copy of copies) renderOnce(copy, htmlSubset);
   return (performance.now() - started) / batch;
 }
 
 // A render under a millisecond is timed as a batch of SAMPLE_MS, so the timer's
-// granularity does not decide the ratio.
-function fastestMs(source) {
-  const batch = Math.max(1, Math.ceil(SAMPLE_MS / Math.max(batchMs(source, 1), 0.01)));
+// granularity does not decide the ratio. A warm-up past the budget is the answer:
+// a quadratic input fails on it instead of being timed RUNS more times.
+function fastestMs(source, htmlSubset = true) {
+  const warmUp = batchMs(source, 1, htmlSubset);
+  if (warmUp > BUDGET_MS) return warmUp;
+  const batch = Math.max(1, Math.ceil(SAMPLE_MS / Math.max(warmUp, 0.01)));
   let best = Infinity;
-  for (let run = 0; run < RUNS; run++) best = Math.min(best, batchMs(source, batch));
+  for (let run = 0; run < RUNS; run++) best = Math.min(best, batchMs(source, batch, htmlSubset));
   return best;
+}
+
+function assertLinear(t, name, build, htmlSubset) {
+  const small = build(SMALL);
+  const large = build(LARGE);
+  // Under the cap the parse is never refused (U3-5 class h), so this is the real work.
+  assert.ok(Buffer.byteLength(large, "utf8") <= LARGE, "the large input stays under the input cap");
+  const smallMs = fastestMs(small, htmlSubset);
+  const largeMs = fastestMs(large, htmlSubset);
+  const ratio = largeMs / smallMs;
+  t.diagnostic(`${name}: 50 KB ${smallMs.toFixed(2)} ms, 200 KB ${largeMs.toFixed(2)} ms, ratio ${ratio.toFixed(2)}`);
+  assert.ok(largeMs < BUDGET_MS, `${name}: 200 KB took ${largeMs.toFixed(1)} ms`);
+  assert.ok(ratio <= MAX_RATIO, `${name}: 200 KB / 50 KB = ${ratio.toFixed(2)}`);
 }
 
 for (const [name, unit] of Object.entries(INPUTS)) {
   test(`U3-6 ${name}: 200 KB renders within ${MAX_RATIO}x the 50 KB time, under ${BUDGET_MS} ms`, (t) => {
-    const small = repeatToBytes(unit, SMALL);
-    const large = repeatToBytes(unit, LARGE);
-    // Under the cap the parse is never refused (U3-5 class h), so this is the real work.
-    assert.ok(Buffer.byteLength(large, "utf8") <= LARGE, "the large input stays under the input cap");
-    const smallMs = fastestMs(small);
-    const largeMs = fastestMs(large);
-    const ratio = largeMs / smallMs;
-    t.diagnostic(`${name}: 50 KB ${smallMs.toFixed(2)} ms, 200 KB ${largeMs.toFixed(2)} ms, ratio ${ratio.toFixed(2)}`);
-    assert.ok(largeMs < BUDGET_MS, `${name}: 200 KB took ${largeMs.toFixed(1)} ms`);
-    assert.ok(ratio <= MAX_RATIO, `${name}: 200 KB / 50 KB = ${ratio.toFixed(2)}`);
+    assertLinear(t, name, (bytes) => repeatToBytes(unit, bytes), true);
   });
+}
+
+// Markdown spans whose closer scan restarted at every opener (security review,
+// 2026-11-18): 200 KB / 50 KB was 15.0-15.8 for the four runs of unclosed
+// openers, and the colour and quote nests threw RangeError. With one closer
+// scan per inline scan (2026-11-18, same command, plain / subset ratio, 3 runs):
+//   colour nest 3.90-3.91 / 3.90-3.95       emphasis openers 4.19-4.33 / 4.17-4.23
+//   link of tags 4.20-4.26 / 4.67-4.76      link brackets 4.10-4.17 / 4.04-4.08
+//   link of less-thans 4.03-4.06 / 4.60-4.70  quote nest 3.71-3.75 / 3.82-3.86
+const SPAN_SHAPES = {
+  "colour nest": (bytes) => {
+    const depth = Math.floor(bytes / 19);
+    return "[color=red]".repeat(depth) + "x" + "[/color]".repeat(depth);
+  },
+  "emphasis openers": (bytes) => repeatToBytes("*a ", bytes),
+  "link of tags": (bytes) => repeatToBytes("[<x ", bytes),
+  "link brackets": (bytes) => repeatToBytes("[x ", bytes),
+  "link of less-thans": (bytes) => repeatToBytes("[< ", bytes),
+  "quote nest": (bytes) => "> ".repeat(Math.floor((bytes - 1) / 2)) + "x",
+};
+
+for (const [name, build] of Object.entries(SPAN_SHAPES)) {
+  for (const htmlSubset of [false, true]) {
+    const label = `${name} (${htmlSubset ? "subset" : "plain"})`;
+    test(`U3-6 ${label}: 200 KB renders within ${MAX_RATIO}x the 50 KB time, under ${BUDGET_MS} ms`, (t) => {
+      assertLinear(t, label, build, htmlSubset);
+    });
+  }
 }
 
 // Both overflowed the call stack (RangeError) before the nesting budget; the

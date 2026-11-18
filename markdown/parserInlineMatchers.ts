@@ -18,7 +18,7 @@ import type {
   InlineParser,
 } from "./parserInlineTypes";
 import { EMOJI_MAP } from "./parserEmoji";
-import { findClosingBracket } from "./parserInlineUtils";
+import { findClosingBracket, nextIndexOf, unclosableOpeners } from "./inlineScanMemo";
 import { hostnameFromUrl } from "./urlSugar";
 import { normalizeInlineLinkHref } from "../inlineLinks";
 import { normalizeInlineColorToken } from "../inlineColorTokens";
@@ -511,19 +511,6 @@ function skipCodeSpan(text: string, cursor: number): number {
   return close === -1 ? cursor + ticks : close + ticks;
 }
 
-const MAX_CACHED_EMPHASIS = 4;
-const failedOpenersCache = new Map<string, { star: Set<number>; underscore: Set<number> }>();
-
-function getFailedOpeners(text: string): { star: Set<number>; underscore: Set<number> } {
-  let entry = failedOpenersCache.get(text);
-  if (!entry) {
-    if (failedOpenersCache.size >= MAX_CACHED_EMPHASIS) failedOpenersCache.clear();
-    entry = { star: new Set(), underscore: new Set() };
-    failedOpenersCache.set(text, entry);
-  }
-  return entry;
-}
-
 function matchStackedEmphasis(
   text: string,
   pos: number,
@@ -539,7 +526,7 @@ function matchStackedEmphasis(
   if (isWhitespaceCode(text.charCodeAt(pos + openLen))) return null; // opener can't precede space
   if (!isStar && pos > 0 && isWordCode(text.charCodeAt(pos - 1))) return null; // no intraword _
 
-  const failedSet = isStar ? getFailedOpeners(text).star : getFailedOpeners(text).underscore;
+  const failedSet = unclosableOpeners(text, marker);
   if (failedSet.has(pos)) return null;
   if (text.indexOf(marker, pos + openLen) === -1) {
     failedSet.add(pos);
@@ -740,7 +727,7 @@ function findMatchingTaggedClose(
     closeTag: string,
     hasAttribute: boolean,
   ): TaggedToken | null {
-    const closeIndex = text.indexOf(closeTag, cursor);
+    const closeIndex = nextIndexOf(text, closeTag, cursor);
     if (closeIndex === -1) return null;
 
     const nextOpenCursor = findNextTaggedOpen(text, cursor, tag, closeIndex, hasAttribute);
@@ -757,7 +744,7 @@ function findMatchingTaggedClose(
     hasAttribute: boolean,
   ): number {
     const openTag = hasAttribute ? `[${tag}=` : `[${tag}]`;
-    const candidate = text.indexOf(openTag, cursor);
+    const candidate = nextIndexOf(text, openTag, cursor);
     if (candidate === -1 || candidate >= closeIndex) return -1;
 
     if (!hasAttribute) return candidate + openTag.length;
@@ -958,7 +945,7 @@ export function createInlineDispatch(
     defineMatcher(["<"], (text, pos) => matchInlineHtmlTag(text, pos, parseInline)),
     defineMatcher(["<"], (text, pos) => {
       if (text[pos] !== "<") return null;
-      const close = text.indexOf(">", pos + 1);
+      const close = nextIndexOf(text, ">", pos + 1);
       if (close === -1) return null;
       const inner = text.slice(pos + 1, close);
       if (/^https?:\/\//.test(inner)) {

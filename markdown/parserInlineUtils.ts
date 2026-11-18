@@ -28,32 +28,6 @@ export function handleNewline(nodes: InlineNode[], text: string, pos: number): v
   }
 }
 
-const MAX_CACHED_BRACKETS = 4;
-const bracketCache = new Map<string, Map<number, number>>();
-
-export function findClosingBracket(text: string, openPos: number): number {
-  if (text.indexOf(']', openPos) === -1) return -1;
-  let map = bracketCache.get(text);
-  if (!map) {
-    if (bracketCache.size >= MAX_CACHED_BRACKETS) bracketCache.clear();
-    map = new Map();
-    const stack: number[] = [];
-    const len = text.length;
-    for (let i = 0; i < len; i++) {
-      const code = text.charCodeAt(i);
-      if (code === 91) {
-        stack.push(i);
-      } else if (code === 93) {
-        if (stack.length > 0) {
-          map.set(stack.pop()!, i);
-        }
-      }
-    }
-    bracketCache.set(text, map);
-  }
-  return map.get(openPos) ?? -1;
-}
-
 export function slugify(text: string): string {
   return text
     .toLowerCase()

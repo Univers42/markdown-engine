@@ -140,6 +140,23 @@ const SPAN_SHAPES = {
   "link brackets": (bytes) => repeatToBytes("[x ", bytes),
   "link of less-thans": (bytes) => repeatToBytes("[< ", bytes),
   "quote nest": (bytes) => "> ".repeat(Math.floor((bytes - 1) / 2)) + "x",
+  // Found after the review by the same probe: 14.3-16.0 at 200 KB / 50 KB, the
+  // half-closed nests 12 s (colour) and 88 s (underline). With each closer
+  // answer kept for the scan, 3 runs: 4.11-4.49, the subset run of inline tags
+  // 4.60-5.24 (the refused tags' text is appended one tag at a time).
+  "colour nest, half closed": (bytes) => {
+    const depth = Math.floor((bytes - 1) / 15);
+    return "[color=red]".repeat(depth) + "x" + "[/color]".repeat(depth >> 1);
+  },
+  "underline nest, half closed": (bytes) => {
+    const depth = Math.floor((bytes - 1) / 5);
+    return "[u]".repeat(depth) + "x" + "[/u]".repeat(depth >> 1);
+  },
+  "colour openers": (bytes) => repeatToBytes("[color=x ", bytes),
+  "footnote refs": (bytes) => repeatToBytes("[^a ", bytes),
+  "inline tags": (bytes) => repeatToBytes("<b>", bytes),
+  "reversed links": (bytes) => repeatToBytes("(a)[b ", bytes),
+  "page link ids": (bytes) => repeatToBytes("[[page:a ", bytes),
 };
 
 for (const [name, build] of Object.entries(SPAN_SHAPES)) {

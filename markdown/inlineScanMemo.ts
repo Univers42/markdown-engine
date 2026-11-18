@@ -4,9 +4,9 @@
 // matcher looks ahead for a closer (`]`, `>`, `[/color]`). With no closer in the
 // text, every opener rescanned to its end: "[x " x 68,266 (200 KB) took 15x the
 // 50 KB time, and a nested colour run was cubic. One frame per parseText call
-// remembers, for that text only, the next occurrence of each closer, the
-// bracket pairs and the emphasis openers that cannot close, so each is found
-// once per scan. The frame replaced caches keyed by text content, which paid a
+// remembers, for that text only, the next occurrence of each closer (a string
+// or a regex), the bracket pairs, the emphasis openers that cannot close and
+// the closes of tagged spans (taggedSpanClose.ts), so each is found once per scan. The frame replaced caches keyed by text content, which paid a
 // full string compare on every lookup once the same text came back as a new
 // string (the editor's next parse): "*a " x 68,267 parsed in 10 ms as the same
 // string object and in 5,797 ms as an equal copy (node 22, 2026-11-18).
@@ -26,9 +26,10 @@ interface NextOccurrence {
 // The maps are made on first use: most paragraphs are prose and ask nothing.
 export interface InlineScanFrame {
   readonly text: string;
-  next: Map<string, NextOccurrence> | null;
+  next: Map<string | RegExp, NextOccurrence> | null;
   unclosable: Map<string, Set<number>> | null;
   brackets: Map<number, number> | null;
+  positions: Map<string, Map<number, number>> | null;
 }
 
 let frame: InlineScanFrame | null = null;
@@ -36,7 +37,7 @@ let frame: InlineScanFrame | null = null;
 /** Starts remembering for `text`; pass the result to leaveScan when done. */
 export function enterScan(text: string): InlineScanFrame | null {
   const outer = frame;
-  frame = { text, next: null, unclosable: null, brackets: null };
+  frame = { text, next: null, unclosable: null, brackets: null, positions: null };
   return outer;
 }
 
@@ -50,11 +51,34 @@ function frameFor(text: string): InlineScanFrame | null {
 
 /** text.indexOf(needle, from), reused while `from` has not passed the answer. */
 export function nextIndexOf(text: string, needle: string, from: number): number {
+  return nextOccurrence(text, needle, from, indexOfIn);
+}
+
+/** Where the global `pattern` next matches text at or after `from`, or -1. */
+export function nextMatchIndex(text: string, pattern: RegExp, from: number): number {
+  return nextOccurrence(text, pattern, from, matchIndexIn);
+}
+
+function indexOfIn(text: string, needle: string, from: number): number {
+  return text.indexOf(needle, from);
+}
+
+function matchIndexIn(text: string, pattern: RegExp, from: number): number {
+  pattern.lastIndex = from;
+  return pattern.exec(text)?.index ?? -1;
+}
+
+function nextOccurrence<Needle extends string | RegExp>(
+  text: string,
+  needle: Needle,
+  from: number,
+  find: (text: string, needle: Needle, from: number) => number,
+): number {
   const scan = frameFor(text);
-  if (!scan) return text.indexOf(needle, from);
+  if (!scan) return find(text, needle, from);
   const known = scan.next?.get(needle);
   if (known && from >= known.from && (known.at === -1 || from <= known.at)) return known.at;
-  const at = text.indexOf(needle, from);
+  const at = find(text, needle, from);
   if (known) {
     known.from = from;
     known.at = at;
@@ -87,11 +111,21 @@ function pairBrackets(text: string): Map<number, number> {
 export function unclosableOpeners(text: string, marker: string): Set<number> {
   const scan = frameFor(text);
   if (!scan) return new Set();
-  scan.unclosable ??= new Map();
-  let openers = scan.unclosable.get(marker);
-  if (!openers) {
-    openers = new Set();
-    scan.unclosable.set(marker, openers);
+  return entryOf((scan.unclosable ??= new Map()), marker, () => new Set<number>());
+}
+
+/** Position-to-position answers one matcher (`key`) keeps for this scan. */
+export function positionAnswers(text: string, key: string): Map<number, number> {
+  const scan = frameFor(text);
+  if (!scan) return new Map();
+  return entryOf((scan.positions ??= new Map()), key, () => new Map<number, number>());
+}
+
+function entryOf<Entry>(table: Map<string, Entry>, key: string, make: () => Entry): Entry {
+  let entry = table.get(key);
+  if (entry === undefined) {
+    entry = make();
+    table.set(key, entry);
   }
-  return openers;
+  return entry;
 }

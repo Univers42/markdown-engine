@@ -18,7 +18,8 @@ import type {
   InlineParser,
 } from "./parserInlineTypes";
 import { EMOJI_MAP } from "./parserEmoji";
-import { findClosingBracket, nextIndexOf, unclosableOpeners } from "./inlineScanMemo";
+import { findClosingBracket, nextIndexOf, nextMatchIndex, unclosableOpeners } from "./inlineScanMemo";
+import { findMatchingTaggedClose } from "./taggedSpanClose";
 import { hostnameFromUrl } from "./urlSugar";
 import { normalizeInlineLinkHref } from "../inlineLinks";
 import { normalizeInlineColorToken } from "../inlineColorTokens";
@@ -117,10 +118,10 @@ function matchReversedLink(
   parseInline: InlineParser,
 ): InlineMatchResult | null {
   if (text[pos] !== "(") return null;
-  const parenClose = text.indexOf(")", pos + 1);
+  const parenClose = nextIndexOf(text, ")", pos + 1);
   if (parenClose === -1 || parenClose === pos + 1) return null; // no text, e.g. "()"
   if (text[parenClose + 1] !== "[") return null; // must be `(text)[…]`
-  const bracketClose = text.indexOf("]", parenClose + 2);
+  const bracketClose = nextIndexOf(text, "]", parenClose + 2);
   if (bracketClose === -1) return null;
   const rawUrl = text.slice(parenClose + 2, bracketClose).trim();
   if (!rawUrl) return null; // `(text)[]` is not a link
@@ -163,15 +164,18 @@ const makeStrikethrough = (children: InlineNode[]): InlineNode => ({
 const makeUnderline = (children: InlineNode[]): InlineNode => ({ type: "underline", children });
 const makeHighlight = (children: InlineNode[]): InlineNode => ({ type: "highlight", children });
 
-const PAGE_LINK_STICKY = /\[\[page:([^\]]+)\]\]/y;
+const PAGE_LINK_OPEN = "[[page:";
 
+// `[[page:<id>]]`: the id runs to the first "]", which must be doubled.
 function matchPageLink(text: string, pos: number): InlineMatchResult | null {
-  const match = execSticky(PAGE_LINK_STICKY, text, pos);
-  if (!match) return null;
+  if (!text.startsWith(PAGE_LINK_OPEN, pos)) return null;
+  const idStart = pos + PAGE_LINK_OPEN.length;
+  const close = nextIndexOf(text, "]", idStart);
+  if (close <= idStart || text[close + 1] !== "]") return null;
   return {
     start: pos,
-    end: pos + match[0].length,
-    node: { type: "internal_link", pageId: match[1] },
+    end: close + 2,
+    node: { type: "internal_link", pageId: text.slice(idStart, close) },
   };
 }
 
@@ -210,7 +214,7 @@ function matchStandardLink(
 
 function matchFootnoteRef(text: string, pos: number): InlineMatchResult | null {
   if (text[pos + 1] !== "^") return null;
-  const close = text.indexOf("]", pos + 2);
+  const close = nextIndexOf(text, "]", pos + 2);
   if (close === -1 || text[close + 1] === "(") return null;
   const label = text.slice(pos + 2, close);
   if (!label || /\s/.test(label)) return null;
@@ -243,7 +247,7 @@ function matchDelimited(
 ): InlineMatchResult | null {
   if (!text.startsWith(open, pos)) return null;
   const start = pos + open.length;
-  const end = text.indexOf(close, start);
+  const end = nextIndexOf(text, close, start);
   if (end === -1 || end === start) return null;
   const inner = text.slice(start, end);
   return {
@@ -320,14 +324,12 @@ function matchInlineHtmlTag(
   const tag = open[1].toLowerCase();
   const factory = INLINE_HTML_TAG_TO_NODE[tag];
   if (!factory) return null;
-  const closeRe = INLINE_HTML_CLOSE_RE[tag];
-  closeRe.lastIndex = pos + open[0].length;
-  const close = closeRe.exec(text);
-  if (!close) return null;
-  const inner = text.slice(pos + open[0].length, close.index);
+  const close = nextMatchIndex(text, INLINE_HTML_CLOSE_RE[tag], pos + open[0].length);
+  if (close === -1) return null;
+  const inner = text.slice(pos + open[0].length, close);
   return {
     start: pos,
-    end: close.index + close[0].length,
+    end: close + tag.length + 3, // "</" + tag + ">"
     node: factory(parseInline(inner)),
   };
 }
@@ -335,7 +337,7 @@ function matchInlineHtmlTag(
 /** `<!-- … -->` consumes silently — comments never reach the rendered output. */
 function matchInlineComment(text: string, pos: number): InlineMatchResult | null {
   if (!text.startsWith("<!--", pos)) return null;
-  const close = text.indexOf("-->", pos + 4);
+  const close = nextIndexOf(text, "-->", pos + 4);
   if (close === -1) return null;
   return { start: pos, end: close + 3, node: null };
 }
@@ -383,7 +385,7 @@ function matchReferenceLink(
   let refLabel = textPart;
   let end = labelClose + 1;
   if (text[labelClose + 1] === "[") {
-    const refClose = text.indexOf("]", labelClose + 2);
+    const refClose = nextIndexOf(text, "]", labelClose + 2);
     if (refClose === -1) return null;
     const explicit = text.slice(labelClose + 2, refClose);
     if (explicit) refLabel = explicit; // `[text][]` collapses to the text
@@ -415,7 +417,7 @@ function matchReferenceImage(
   let refLabel = alt;
   let end = altClose + 1;
   if (text[altClose + 1] === "[") {
-    const refClose = text.indexOf("]", altClose + 2);
+    const refClose = nextIndexOf(text, "]", altClose + 2);
     if (refClose === -1) return null;
     const explicit = text.slice(altClose + 2, refClose);
     if (explicit) refLabel = explicit;
@@ -640,7 +642,7 @@ function matchTaggedInlineColor(
   const opener = `[${tag}=`;
   if (!text.startsWith(opener, pos)) return null;
 
-  const bracketEnd = text.indexOf("]", pos + opener.length);
+  const bracketEnd = nextIndexOf(text, "]", pos + opener.length);
   if (bracketEnd === -1) return null;
 
   const openLength = bracketEnd - pos + 1;
@@ -684,74 +686,6 @@ function matchTaggedInlineChildren(
     node: factory(parseInline(inner)),
   };
 }
-
-function findMatchingTaggedClose(
-  text: string,
-  start: number,
-  tag: string,
-  hasAttribute: boolean,
-): number {
-  const closeTag = `[/${tag}]`;
-  let depth = 1;
-  let cursor = start;
-
-  while (cursor < text.length) {
-      const token = findNextTaggedToken(text, cursor, tag, closeTag, hasAttribute);
-      if (!token) return -1;
-
-      if (token.kind === "open") {
-      depth += 1;
-        cursor = token.nextCursor;
-      continue;
-    }
-
-    depth -= 1;
-    if (depth === 0) {
-        return token.index;
-    }
-
-      cursor = token.index + closeTag.length;
-  }
-
-  return -1;
-}
-
-  type TaggedToken =
-    | { kind: "open"; nextCursor: number }
-    | { kind: "close"; index: number };
-
-  function findNextTaggedToken(
-    text: string,
-    cursor: number,
-    tag: string,
-    closeTag: string,
-    hasAttribute: boolean,
-  ): TaggedToken | null {
-    const closeIndex = nextIndexOf(text, closeTag, cursor);
-    if (closeIndex === -1) return null;
-
-    const nextOpenCursor = findNextTaggedOpen(text, cursor, tag, closeIndex, hasAttribute);
-    return nextOpenCursor === -1
-      ? { kind: "close", index: closeIndex }
-      : { kind: "open", nextCursor: nextOpenCursor };
-  }
-
-  function findNextTaggedOpen(
-    text: string,
-    cursor: number,
-    tag: string,
-    closeIndex: number,
-    hasAttribute: boolean,
-  ): number {
-    const openTag = hasAttribute ? `[${tag}=` : `[${tag}]`;
-    const candidate = nextIndexOf(text, openTag, cursor);
-    if (candidate === -1 || candidate >= closeIndex) return -1;
-
-    if (!hasAttribute) return candidate + openTag.length;
-
-    const bracketEnd = text.indexOf("]", candidate + openTag.length);
-    return bracketEnd === -1 ? -1 : bracketEnd + 1;
-  }
 
 function findDestinationClose(text: string, start: number): number {
   let depth = 0;

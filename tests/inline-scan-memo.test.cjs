@@ -79,3 +79,29 @@ test("unclosable openers are kept per scan and per marker, and restored on leave
   M.unclosableOpeners("*a _b", "*").add(0);
   assert.strictEqual(M.unclosableOpeners("*a _b", "*").size, 0, "outside a scan nothing is remembered");
 });
+
+test("nextMatchIndex answers as a global regex from the position, for rising and random positions", () => {
+  const random = createRandom(0x2e9e7);
+  const pattern = /<\/b>/gi;
+  for (let round = 0; round < 400; round++) {
+    const text = randomText(random, ["a", "<b>", "</b>", "</B>", "<", " "], 1 + Math.floor(random() * 80));
+    withScan(text, () => {
+      for (const from of positions(random, text, round % 2 === 0)) {
+        const reference = new RegExp(pattern.source, "gi");
+        reference.lastIndex = from;
+        const expected = reference.exec(text)?.index ?? -1;
+        assert.strictEqual(M.nextMatchIndex(text, pattern, from), expected, `${JSON.stringify(text)} @${from}`);
+      }
+    });
+  }
+});
+
+test("position answers are kept per scan and per key, and nothing is kept outside a scan", () => {
+  withScan("[u]x[/u]", () => {
+    M.positionAnswers("[u]x[/u]", "[u]").set(3, 4);
+    assert.strictEqual(M.positionAnswers("[u]x[/u]", "[u]").get(3), 4);
+    assert.strictEqual(M.positionAnswers("[u]x[/u]", "[b]").size, 0, "per key");
+  });
+  M.positionAnswers("[u]x[/u]", "[u]").set(3, 4);
+  assert.strictEqual(M.positionAnswers("[u]x[/u]", "[u]").size, 0, "outside a scan nothing is kept");
+});

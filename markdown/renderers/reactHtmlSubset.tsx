@@ -52,10 +52,22 @@ export function userContentId(id: string | undefined, htmlSubset: HtmlSubsetRend
   return htmlSubset ? `user-content-${id}` : id;
 }
 
-// In README mode a mention's favicon is a remote image like any other: https only.
-export function faviconSrc(href: string, htmlSubset: HtmlSubsetRenderOptions | undefined): string {
-  const src = mentionFaviconSrc(href);
-  return htmlSubset ? sanitizeImageSrc(src, []) : src;
+// A link mention's favicon. In README mode it is a remote image like any other: https only.
+export function renderMentionFavicon(
+  href: string,
+  htmlSubset: HtmlSubsetRenderOptions | undefined,
+): React.ReactElement | null {
+  const src = htmlSubset ? sanitizeImageSrc(mentionFaviconSrc(href), []) : mentionFaviconSrc(href);
+  if (!src) return null;
+  return React.createElement("img", {
+    key: "favicon",
+    className: "editor-link-favicon",
+    "data-link-favicon": "true",
+    src,
+    alt: "",
+    loading: "lazy",
+    ...(htmlSubset ? REMOTE_IMAGE_PROPS : {}),
+  });
 }
 
 /** An image under the subset policy, or null when its source is refused. */

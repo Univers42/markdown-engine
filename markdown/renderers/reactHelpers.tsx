@@ -23,7 +23,7 @@ import {
 import { sanitizeUrl } from "../../renderCore";
 import { isLinkMention, mentionHost } from "../linkMention";
 import {
-  REMOTE_IMAGE_PROPS, externalLinkProps, faviconSrc, renderHtmlElement, renderSubsetImage, userContentId,
+  externalLinkProps, renderHtmlElement, renderMentionFavicon, renderSubsetImage, userContentId,
   type HtmlSubsetRenderOptions,
 } from "./reactHtmlSubset";
 
@@ -229,7 +229,7 @@ export function renderInlineNode(
       if (isMention && mentionHost(href) === "") {
         return React.createElement(React.Fragment, { key }, ...renderInlines(node.children, o));
       }
-      const favicon = isMention ? faviconSrc(href, o.htmlSubset) : "";
+      const favicon = isMention ? renderMentionFavicon(href, o.htmlSubset) : null;
       const props: Record<string, unknown> = {
         key,
         href: href || "#",
@@ -240,19 +240,7 @@ export function renderInlineNode(
         ...externalLinkProps(href, o.externalLinks),
       };
       const children = renderInlines(node.children, o);
-      if (favicon) {
-        children.unshift(
-          React.createElement("img", {
-            key: "favicon",
-            className: "editor-link-favicon",
-            "data-link-favicon": "true",
-            src: favicon,
-            alt: "",
-            loading: "lazy",
-            ...(o.htmlSubset ? REMOTE_IMAGE_PROPS : {}),
-          }),
-        );
-      }
+      if (favicon) children.unshift(favicon);
       return React.createElement("a", props, ...children);
     }
 

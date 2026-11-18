@@ -57,6 +57,14 @@ test("U3-3 an HTML anchor goes through the link renderer, never as a mention", (
   assert.deepStrictEqual(anchor.children, ["x"], "no favicon chip, the tag is not text");
 });
 
+test("U3-7 a markdown mention's favicon is a remote image: https only, same policy", () => {
+  const [favicon] = elementsOfType(render('[x](https://a.io/p "osio:mention")'), "img");
+  assert.deepStrictEqual(ownProps(favicon), {
+    className: "editor-link-favicon", "data-link-favicon": "true", src: "https://a.io/favicon.ico", alt: "", ...REMOTE_IMAGE,
+  });
+  assert.deepStrictEqual(elementsOfType(render('[x](http://a.io/p "osio:mention")'), "img"), []);
+});
+
 test("an anchor whose href is refused renders its children only", () => {
   const tree = render('<a href="javascript:alert(1)">x</a>');
   assert.strictEqual(elementsOfType(tree, "a").length, 0);

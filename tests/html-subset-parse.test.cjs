@@ -143,3 +143,15 @@ test("nesting stays at 16 across markdown inside HTML (paragraphs, quotes, lists
     assert.strictEqual(htmlElementDepth(blocks), 16, inner);
   }
 });
+
+test("nesting stays at 16 when a markdown span re-enters the inline parser", () => {
+  const spans = {
+    bold: ("<b>".repeat(15) + "**").repeat(6) + "x" + "**".repeat(6),
+    link: ("<b>".repeat(15) + "[").repeat(6) + "x" + "](https://a.example)".repeat(6),
+    color: ("<b>".repeat(15) + "[color=red]").repeat(40) + "x" + "[/color]".repeat(40),
+  };
+  for (const [name, markdown] of Object.entries(spans)) {
+    const depth = htmlElementDepth(plain(E.parse(markdown, { htmlSubset: true })));
+    assert.ok(depth <= 16, `${name}: depth ${depth}`);
+  }
+});

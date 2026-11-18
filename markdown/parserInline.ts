@@ -16,7 +16,7 @@ import type { InlineMatchResult, InlineMatcher, InlineParser } from './parserInl
 import { handleNewline, appendChar } from './parserInlineUtils';
 import { createInlineDispatch } from './parserInlineMatchers';
 import { matchHtmlSubsetAt } from './htmlSubset/inline';
-import { isHtmlSubsetActive } from './htmlSubset/session';
+import { htmlDepthBase, isHtmlSubsetActive, setHtmlDepthBase } from './htmlSubset/session';
 import { inlineHtmlTree, unwrapAnchors, type HtmlTreeBuilder } from './htmlSubset/tree';
 
 export { slugify } from './parserInlineUtils';
@@ -99,12 +99,13 @@ function createInlineParser(withHtml: boolean): InlineParser {
         continue;
       }
 
-      const result = tryMatchInline(text, pos, dispatch[text[pos]]);
+      const matchers = dispatch[text[pos]];
+      const result = html ? matchInsideHtml(text, pos, matchers, html) : tryMatchInline(text, pos, matchers);
       if (result) {
         if (result.start > pos) {
           appendTextRun(nodes, text.slice(pos, result.start));
         }
-        if (result.node) nodes.push(html ? withoutNestedAnchors(result.node) : result.node);
+        if (result.node) nodes.push(result.node);
         pos = result.end;
       } else {
         appendChar(nodes, text[pos]);
@@ -126,10 +127,25 @@ function applyHtmlMatch(text: string, pos: number, nodes: InlineNode[], html: Ht
   return match.end;
 }
 
-// A markdown link whose text holds an HTML <a> would nest anchors.
-function withoutNestedAnchors(node: InlineNode): InlineNode {
-  if (node.type === 'link') unwrapAnchors(node.children);
-  return node;
+// A matched span (bold, link text, a colour run) parses its content with a new
+// inline tree, below the elements open here: the depth cap counts on from this
+// tree's depth, as nest.ts does for blocks, or every span restarts at 0. A link
+// whose text holds an HTML <a> would nest anchors, so they are unwrapped.
+function matchInsideHtml(
+  text: string,
+  pos: number,
+  matchers: InlineMatcher[],
+  html: HtmlTreeBuilder<InlineNode>,
+): InlineMatchResult | null {
+  const outerBase = htmlDepthBase();
+  setHtmlDepthBase(html.depth());
+  try {
+    const result = tryMatchInline(text, pos, matchers);
+    if (result?.node?.type === 'link') unwrapAnchors(result.node.children);
+    return result;
+  } finally {
+    setHtmlDepthBase(outerBase);
+  }
 }
 
 const DISPATCH_CODES = new Uint8Array(128);

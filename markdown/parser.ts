@@ -18,6 +18,7 @@ import { setInlineRefDefinitions } from "./parserInlineMatchers";
 import { collectRefDefinitions } from "./refDefinitions";
 import type { ParseContext } from "./parserBlockHelpers";
 import { CONTAINER_OPEN_RE } from "./blockKind";
+import { parseContainer } from "./parserBlockContainer";
 import {
   peek,
   advance,
@@ -146,38 +147,6 @@ function skipHtmlCommentBlock(ctx: ParseContext): void {
     const line = advance(ctx);
     if (line.includes("-->")) return;
   }
-}
-
-/**
- * Pandoc-style fenced div: `:::name [params]` … bare `:::` closes. Containers
- * nest — an inner `:::name` opener deepens, each bare `:::` closes one level.
- * The editor's column layout serializes as `:::columns` / `:::column <ratio>`.
- */
-function parseContainer(
-  ctx: ParseContext,
-  parseFn: ParseBlocksFn,
-): BlockNode {
-  const open = CONTAINER_OPEN_RE.exec(advance(ctx).trimStart());
-  const kind = open?.[1].toLowerCase() ?? "div";
-  const params = open?.[2].trim() || undefined;
-  const innerLines: string[] = [];
-  let depth = 1;
-  while (ctx.pos < ctx.lines.length) {
-    const line = ctx.lines[ctx.pos];
-    const trimmed = line.trimStart();
-    if (CONTAINER_OPEN_RE.test(trimmed)) depth += 1;
-    else if (/^:::\s*$/.test(trimmed)) {
-      depth -= 1;
-      if (depth === 0) {
-        advance(ctx);
-        break;
-      }
-    }
-    innerLines.push(line);
-    advance(ctx);
-  }
-  const innerCtx: ParseContext = { lines: innerLines, pos: 0 };
-  return { type: "container", kind, params, children: parseFn(innerCtx, 0) };
 }
 
 const DEFINITION_MARKER_RE = /^:\s+/;

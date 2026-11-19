@@ -14,6 +14,7 @@
 import type { MarkEngineBlock as Block, MarkEngineBlockType as BlockType } from "../blockContract";
 import { createTableBlockFromData } from "../tableConfig";
 import type { BlockNode, InlineNode } from "./ast";
+import { containerToBlocks, withContainerAttributes } from "./containerBlocks";
 import { closesFence, fenceRunAt, type FenceRun } from "./fence";
 import { parse } from "./parser";
 
@@ -34,13 +35,17 @@ export function parseMarkdownToBlocks(markdown: string, options?: ParseOptions):
   const keep = options?.keepEmptyParagraphs === true;
   const source = keep ? withEmptySentinels(markdown) : markdown;
   const ast = parse(source);
-  const blocks = ast.flatMap((node) => astToBlocks(node));
+  const blocks = withContainerAttributes(options?.containerAttributes === true, () =>
+    ast.flatMap((node) => astToBlocks(node)),
+  );
   return keep ? withoutEmptySentinels(blocks) : blocks;
 }
 
 /** Parse options: `keepEmptyParagraphs` restores opt-in empty paragraphs. */
 export interface ParseOptions {
   keepEmptyParagraphs?: boolean;
+  /** Attach each column container's kind and raw `{k=v}` attributes for the host to map. */
+  containerAttributes?: boolean;
 }
 
 // A lone zero-width space parses as a one-character paragraph anywhere,
@@ -305,35 +310,6 @@ function imageBlockFromParagraph(
   };
 }
 
-function containerToBlocks(
-  node: Extract<BlockNode, { type: "container" }>,
-): Block[] {
-  if (node.kind === "columns") {
-    return [
-      {
-        id: crypto.randomUUID(),
-        type: "column_list",
-        content: "",
-        children: node.children.flatMap((child) => astToBlocks(child)),
-      },
-    ];
-  }
-  if (node.kind === "column") {
-    const ratio = Number.parseFloat(node.params ?? "");
-    return [
-      {
-        id: crypto.randomUUID(),
-        type: "column",
-        content: "",
-        ...(Number.isFinite(ratio) ? { widthRatio: ratio } : {}),
-        children: node.children.flatMap((child) => astToBlocks(child)),
-      },
-    ];
-  }
-  // Unknown container kinds flatten to their children — nothing is lost.
-  return node.children.flatMap((child) => astToBlocks(child));
-}
-
 function astToBlocks(node: BlockNode): Block[] {
   switch (node.type) {
     case "document":
@@ -396,7 +372,7 @@ function astToBlocks(node: BlockNode): Block[] {
       ];
     }
     case "container":
-      return containerToBlocks(node);
+      return containerToBlocks(node, astToBlocks);
     case "unordered_list":
       return node.children.map((item) =>
         listItemToBlock("bulleted_list", item),

@@ -85,8 +85,16 @@ export type BlockNode =
   | { type: 'definition_list'; items: DefinitionItem[] }
   | { type: 'toggle'; summary: InlineNode[]; children: BlockNode[]; level?: 1 | 2 | 3 | 4 | 5 | 6 }
   | { type: 'front_matter'; value: string }
-  | { type: 'container'; kind: string; params?: string; children: BlockNode[] }
+  | { type: 'container'; kind: string; params?: string; attributes?: ContainerAttributes; children: BlockNode[] }
   | HtmlElementNode;
+
+/** A container opener's trailing `{k=v …}`: raw strings, validated by the host. */
+export interface ContainerAttributes {
+  /** Null prototype: `__proto__` and `constructor` are own string values, never inherited. */
+  values: Record<string, string>;
+  /** One reason per dropped item: `length`, `pairs`, `malformed`, `duplicate`. */
+  dropped: string[];
+}
 
 export interface ListItemNode {
   type: 'list_item';

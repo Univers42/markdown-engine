@@ -89,5 +89,7 @@ export interface MarkEngineBlock {
   // the host, which re-validates it on decode, and the engine only carries it as JSON.
   tableData?: string[][];
   tableConfig?: TableBlockConfig;
+  /** Opt-in (`containerAttributes`): a container's kind and raw attributes; the host maps and removes it. */
+  containerAttributes?: { kind: string; values: Record<string, string>; dropped: string[] };
   [key: string]: unknown;
 }

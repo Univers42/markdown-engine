@@ -11,6 +11,7 @@
 // container still ends at its `:::` and the code runs to that end, as before.
 import type { BlockNode } from "./ast";
 import { CONTAINER_OPEN_RE } from "./blockKind";
+import { parseContainerAttributes } from "./containerAttributes";
 import { closesFence, fenceRunAt, type FenceRun } from "./fence";
 import { advance, type ParseContext } from "./parserBlockContext";
 
@@ -71,6 +72,8 @@ export function parseContainer(ctx: ParseContext, parseFn: ParseBlocksFn): Block
   const open = CONTAINER_OPEN_RE.exec(advance(ctx).trimStart());
   const kind = open?.[1].toLowerCase() ?? "div";
   const params = open?.[2].trim() || undefined;
+  const attributes = parseContainerAttributes(params);
   const innerCtx: ParseContext = { lines: containerBody(ctx), pos: 0 };
-  return { type: "container", kind, params, children: parseFn(innerCtx, 0) };
+  const children = parseFn(innerCtx, 0);
+  return attributes ? { type: "container", kind, params, attributes, children } : { type: "container", kind, params, children };
 }

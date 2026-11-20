@@ -27,6 +27,7 @@ const allowedPublicFacadeFiles = new Set([
   "markdown/index.ts",
   "markdown/parserBlockHelpers.ts",
   "markdown/parserBlockNested.ts",
+  "markdown/scanSteps.ts", // bench-only step counter (ADR 0068 D5): read by bench/, never re-exported
   "markdown/renderers/terminalHelpers.ts",
   "vite.config.ts",
 ]);

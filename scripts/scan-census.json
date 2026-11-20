@@ -1,0 +1,273 @@
+{
+  "description": "ADR 0068 D2: raw scans and loops per file on the parse+render path. Regenerate counts with `node scripts/check-scan-census.cjs --write`; a changed count needs its reason updated in the same commit.",
+  "scope": [
+    "markdown/inlineScanMemo.ts",
+    "markdown/parserInline.ts",
+    "markdown/parserInlineMatchers.ts",
+    "markdown/parserInlineUtils.ts",
+    "markdown/taggedSpanClose.ts",
+    "markdown/htmlSubset/allowlist.ts",
+    "markdown/htmlSubset/entities.ts",
+    "markdown/htmlSubset/imageSrc.ts",
+    "markdown/htmlSubset/inline.ts",
+    "markdown/htmlSubset/nest.ts",
+    "markdown/htmlSubset/session.ts",
+    "markdown/htmlSubset/tokenizer.ts",
+    "markdown/htmlSubset/tree.ts",
+    "markdown/renderers/reactHtmlSubset.tsx"
+  ],
+  "files": {
+    "markdown/inlineScanMemo.ts": {
+      "reason": "3 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays); a memo hit adds 0.",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 0,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 0,
+        "replace": 0,
+        "split": 0,
+        "slice": 0,
+        "substring": 0,
+        "loop": 1
+      }
+    },
+    "markdown/parserInline.ts": {
+      "reason": "2 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays) (the main-loop count covers the run walk); 2 BOUNDED sites scan a constant-bounded span (matcher list for one char, module init); 1 BOUNDED-COPY sites copy a span only on the success path, and the nested scan counts it again.",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 0,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 0,
+        "replace": 0,
+        "split": 0,
+        "slice": 1,
+        "substring": 0,
+        "loop": 4
+      }
+    },
+    "markdown/parserInlineMatchers.ts": {
+      "reason": "28 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays); 13 BOUNDED sites scan a constant-bounded span (module init, VARIABLE_MAX_EXPR 256, fixed tags); 16 BOUNDED-COPY sites copy a span only on the success path, and the nested scan counts it again. Residuals: the bare-URL shape test (line ~59) runs only on the editor gate, not parse+render (UNSURE, uncounted); the email regex is quadratic on backtracking and counts its matched span only (ADR 0068 D12 b).",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 1,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 4,
+        "test": 6,
+        "replace": 0,
+        "split": 0,
+        "slice": 28,
+        "substring": 0,
+        "loop": 12
+      }
+    },
+    "markdown/parserInlineUtils.ts": {
+      "reason": "2 BOUNDED-COPY sites copy a span only on the success path, and the nested scan counts it again.",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 0,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 0,
+        "replace": 0,
+        "split": 0,
+        "slice": 2,
+        "substring": 0,
+        "loop": 0
+      }
+    },
+    "markdown/taggedSpanClose.ts": {
+      "reason": "4 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays).",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 0,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 0,
+        "replace": 0,
+        "split": 0,
+        "slice": 0,
+        "substring": 0,
+        "loop": 4
+      }
+    },
+    "markdown/htmlSubset/allowlist.ts": {
+      "reason": "3 BOUNDED sites scan a constant-bounded span (fixed allowlists); 1 not a scan.",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 1,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 1,
+        "test": 1,
+        "replace": 0,
+        "split": 0,
+        "slice": 0,
+        "substring": 0,
+        "loop": 1
+      }
+    },
+    "markdown/htmlSubset/entities.ts": {
+      "reason": "2 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays).",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 0,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 0,
+        "replace": 1,
+        "split": 0,
+        "slice": 0,
+        "substring": 0,
+        "loop": 0
+      }
+    },
+    "markdown/htmlSubset/imageSrc.ts": {
+      "reason": "8 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays); 1 BOUNDED sites scan a constant-bounded span.",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 0,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 5,
+        "replace": 0,
+        "split": 0,
+        "slice": 1,
+        "substring": 0,
+        "loop": 2
+      }
+    },
+    "markdown/htmlSubset/inline.ts": {
+      "reason": "1 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays); 5 BOUNDED sites scan a constant-bounded span (MAX_HTML_DEPTH, fixed tag sets); 1 BOUNDED-COPY sites copy a span only on the success path, and the nested scan counts it again.",
+      "counts": {
+        "indexOf": 2,
+        "lastIndexOf": 1,
+        "includes": 0,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 2,
+        "replace": 0,
+        "split": 0,
+        "slice": 1,
+        "substring": 0,
+        "loop": 1
+      }
+    },
+    "markdown/htmlSubset/nest.ts": {
+      "reason": "4 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays); 2 BOUNDED-COPY sites copy a span only on the success path, and the nested scan counts it again.",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 0,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 0,
+        "replace": 0,
+        "split": 0,
+        "slice": 2,
+        "substring": 0,
+        "loop": 3
+      }
+    },
+    "markdown/htmlSubset/session.ts": {
+      "reason": "1 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays).",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 0,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 0,
+        "replace": 0,
+        "split": 0,
+        "slice": 0,
+        "substring": 0,
+        "loop": 1
+      }
+    },
+    "markdown/htmlSubset/tokenizer.ts": {
+      "reason": "11 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays); 1 BOUNDED sites scan a constant-bounded span; 4 BOUNDED-COPY sites copy a span only on the success path, and the nested scan counts it again.",
+      "counts": {
+        "indexOf": 1,
+        "lastIndexOf": 0,
+        "includes": 0,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 0,
+        "replace": 0,
+        "split": 0,
+        "slice": 5,
+        "substring": 0,
+        "loop": 7
+      }
+    },
+    "markdown/htmlSubset/tree.ts": {
+      "reason": "3 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays); 3 BOUNDED sites scan a constant-bounded span (MAX_HTML_DEPTH stack); 1 not a scan.",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 1,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 0,
+        "replace": 0,
+        "split": 0,
+        "slice": 0,
+        "substring": 0,
+        "loop": 6
+      }
+    },
+    "markdown/renderers/reactHtmlSubset.tsx": {
+      "reason": "1 BOUNDED sites scan a constant-bounded span.",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 0,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 0,
+        "replace": 0,
+        "split": 0,
+        "slice": 0,
+        "substring": 0,
+        "loop": 1
+      }
+    }
+  }
+}

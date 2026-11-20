@@ -32,7 +32,7 @@
     "test:unit": "node --test tests/*.test.js tests/*.test.cjs",
     "test": "npm run build:engine && npm run test:unit",
     "check": "npm run typecheck && npm run quality && npm test && npm run coverage:parsers",
-    "quality": "npm run quality:escape-hatches && npm run quality:unused-exports && npm run quality:circular-deps",
+    "quality": "npm run quality:escape-hatches && npm run quality:unused-exports && npm run quality:circular-deps && node scripts/check-scan-census.cjs",
     "quality:escape-hatches": "node scripts/check-quality-gates.cjs",
     "quality:unused-exports": "node scripts/check-unused-exports.cjs",
     "quality:circular-deps": "madge --extensions ts,tsx --circular .",

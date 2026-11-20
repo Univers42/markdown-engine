@@ -21,7 +21,11 @@
 // (e) plain-mode quote nests count nothing at all (UNCOUNTED below): only the
 // deadline bounds them.
 //
-// T_STEPS = 5 is provisional until the D8/D10 runs fix it (ADR 0068 D9).
+// T_STEPS = 5 (ADR 0068 D9): a linear render measures 4.00-4.03 (length
+// ratio 4.00); the slowest caught mutant measures 15.99 (M2', the counted
+// rescan) and 16.00 (M1, memo off), so 5 <= 15.99 / 2 = 8.0 keeps both a
+// margin over linear and twice the room under quadratic. Measured 2026-11-20,
+// three runs per mutant, identical step totals idle and under 20 busy loops.
 const test = require("node:test");
 const assert = require("node:assert");
 const path = require("node:path");

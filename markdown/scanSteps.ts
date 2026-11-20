@@ -41,11 +41,16 @@ export function countedMatchIndex(text: string, pattern: RegExp, from: number): 
   return match.index;
 }
 
+// The throw lives in its own function and the check is two compares: with the
+// throw and Number.isInteger in place, "parse inline mixed 10K chars" ran +14.4 % over the
+// uncounted engine; moved out, +3.1 % (ADR 0068 D4, d4-ab, 2026-11-20).
+function refuseSteps(n: number): never {
+  throw new RangeError(`countSteps needs a non-negative integer, got ${n}`);
+}
+
 /** Adds a native scan loop's explicitly reported step count. */
 export function countSteps(n: number): void {
-  if (!Number.isInteger(n) || n < 0) {
-    throw new RangeError(`countSteps needs a non-negative integer, got ${n}`);
-  }
+  if (!(n >= 0) || n % 1 !== 0) refuseSteps(n);
   steps += n;
 }
 

@@ -9,6 +9,7 @@ import { decodeHtmlEntities } from "./entities";
 import { htmlDepthBase, runInHtmlSubsetSession, setHtmlDepthBase } from "./session";
 import { scanHtmlAt } from "./tokenizer";
 import { blockHtmlTree, type HtmlChild, type HtmlTreeBuilder } from "./tree";
+import { countSteps, countedIndexOf } from "../scanSteps";
 
 // Blocks are fed as they are parsed, so a block's own HTML (a paragraph's inline
 // tags, a quote's nested tree) is parsed knowing how deep it will sit.
@@ -17,6 +18,7 @@ export function nestHtmlBlocks(hasMore: () => boolean, next: () => BlockNode | n
   const outerBase = htmlDepthBase();
   try {
     while (hasMore()) {
+      countSteps(1);
       setHtmlDepthBase(builder.depth());
       const block = next();
       if (block?.type === "html_block") feedHtml(builder, block.value);
@@ -41,7 +43,7 @@ export function parseHtmlFragment(html: string): BlockNode[] {
 function feedHtml(builder: HtmlTreeBuilder<HtmlChild>, html: string): void {
   let pos = 0;
   while (pos < html.length) {
-    const lt = html.indexOf("<", pos);
+    const lt = countedIndexOf(html, "<", pos);
     const textEnd = lt === -1 ? html.length : lt;
     if (textEnd > pos) builder.appendText(decodeHtmlEntities(html.slice(pos, textEnd)));
     if (lt === -1) return;
@@ -66,6 +68,7 @@ function feedTag(builder: HtmlTreeBuilder<HtmlChild>, html: string, at: number):
 // anonymous inline run. Whitespace-only text is dropped.
 function wrapTopLevel(nodes: HtmlChild[]): BlockNode[] {
   const blocks: BlockNode[] = [];
+  countSteps(nodes.length);
   for (const node of nodes) {
     if (isBlockNode(node)) blocks.push(node);
     else if (node.type === "text" && node.value.trim() !== "") {

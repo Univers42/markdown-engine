@@ -2,6 +2,7 @@
 // untrusted, so one parse() call gets a bounded element count and a bounded
 // amount of tag scanning that found no tag. parse() is synchronous, which is
 // why the slot is module state; a nested run restores the outer slot.
+import { countSteps } from "../scanSteps";
 
 export const MAX_HTML_DEPTH = 16;
 export const MAX_HTML_ELEMENTS = 5000;
@@ -72,7 +73,8 @@ const isLowSurrogate = (code: number): boolean => code >= 0xdc00 && code <= 0xdf
 export function exceedsUtf8Bytes(text: string, cap: number): boolean {
   if (text.length > cap) return true;
   let bytes = 0;
-  for (let i = 0; i < text.length && bytes <= cap; i++) {
+  let i = 0;
+  for (; i < text.length && bytes <= cap; i++) {
     const code = text.charCodeAt(i);
     if (isHighSurrogate(code) && isLowSurrogate(text.charCodeAt(i + 1))) {
       bytes += 4;
@@ -81,5 +83,6 @@ export function exceedsUtf8Bytes(text: string, cap: number): boolean {
       bytes += utf8Width(code);
     }
   }
+  countSteps(i);
   return bytes > cap;
 }

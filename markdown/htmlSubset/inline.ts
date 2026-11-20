@@ -5,6 +5,7 @@
 import type { InlineNode } from "../ast";
 import { SUBSET_TAGS } from "./allowlist";
 import { scanHtmlAt, type HtmlTagToken } from "./tokenizer";
+import { countSteps } from "../scanSteps";
 
 export interface HtmlInlineMatch {
   start: number;
@@ -26,6 +27,7 @@ export function matchHtmlSubsetAt(text: string, pos: number): HtmlInlineMatch {
 function matchAngleAutolink(text: string, pos: number): HtmlInlineMatch | null {
   let end = pos + 1;
   while (end < text.length && !/[\s<>]/.test(text[end])) end++;
+  countSteps(end - pos);
   if (text[end] !== ">") return null;
   const target = text.slice(pos + 1, end);
   const href = autolinkHref(target);

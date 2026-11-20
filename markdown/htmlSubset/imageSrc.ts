@@ -2,6 +2,7 @@
 // the app's own media prefixes. Deliberately narrower than sanitizeUrl (devil
 // ruling U3-3): an image loads with no click, so http (mixed content), data:,
 // blob:, protocol-relative and traversing paths are refused.
+import { countSteps, countedIndexOf } from "../scanSteps";
 
 const ASCII_WHITESPACE = new Set([9, 10, 12, 13, 32]);
 const UNSAFE_CHARACTER = /[\u0000- \u007f\\]/;
@@ -9,6 +10,7 @@ const ENCODED_SEPARATOR = /%(?:2e|2f|5c)/i;
 
 export function sanitizeImageSrc(src: string, mediaPrefixes: readonly string[]): string {
   const value = trimAsciiWhitespace(src);
+  countSteps(value.length);
   if (value === "" || UNSAFE_CHARACTER.test(value)) return "";
   if (/^https:\/\//i.test(value)) return absoluteHttps(value);
   return mediaPath(value, mediaPrefixes);
@@ -21,6 +23,7 @@ function trimAsciiWhitespace(value: string): string {
   let end = value.length;
   while (start < end && ASCII_WHITESPACE.has(value.charCodeAt(start))) start++;
   while (end > start && ASCII_WHITESPACE.has(value.charCodeAt(end - 1))) end--;
+  countSteps(value.length);
   return value.slice(start, end);
 }
 
@@ -46,6 +49,7 @@ function mediaPath(value: string, mediaPrefixes: readonly string[]): string {
 // Checked on the raw and on the once-decoded path, so `%2e%2e` and `%252e` are
 // both refused whatever the media server decodes.
 function escapesPrefix(path: string): boolean {
+  countSteps(path.length);
   if (ENCODED_SEPARATOR.test(path)) return true;
   let decoded: string;
   try {
@@ -53,5 +57,9 @@ function escapesPrefix(path: string): boolean {
   } catch {
     return true;
   }
-  return decoded.includes("..") || ENCODED_SEPARATOR.test(decoded) || UNSAFE_CHARACTER.test(decoded);
+  if (countedIndexOf(decoded, "..", 0) !== -1) return true;
+  countSteps(decoded.length);
+  if (ENCODED_SEPARATOR.test(decoded)) return true;
+  countSteps(decoded.length);
+  return UNSAFE_CHARACTER.test(decoded);
 }

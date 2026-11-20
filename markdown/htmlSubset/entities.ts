@@ -5,6 +5,7 @@
 // names without ";" (`&amp` alone) are not decoded, and numeric 0x80-0x9F is not
 // remapped to Windows-1252 as a browser does. Either way the decoded value is
 // the one validated and rendered; nothing re-parses it.
+import { countSteps, countedIndexOf } from "../scanSteps";
 
 const NAMED = new Map<string, string>([
   ["amp", "&"], ["AMP", "&"], ["lt", "<"], ["LT", "<"], ["gt", ">"], ["GT", ">"],
@@ -28,7 +29,8 @@ const NAMED = new Map<string, string>([
 const REFERENCE = /&(?:#(\d+);?|#[xX]([0-9a-fA-F]+);?|([A-Za-z][A-Za-z0-9]{1,31});)/g;
 
 export function decodeHtmlEntities(text: string): string {
-  if (!text.includes("&")) return text;
+  if (countedIndexOf(text, "&", 0) === -1) return text;
+  countSteps(text.length);
   return text.replace(REFERENCE, decodeReference);
 }
 

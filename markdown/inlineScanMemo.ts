@@ -17,6 +17,7 @@
 // answer, and each lookup then costs one indexOf, as before the memo: never
 // slower than without it, but not linear for such an input. A text that is not
 // the current scan's gets a plain indexOf and nothing remembered.
+import { countSteps, countedIndexOf, countedMatchIndex } from "./scanSteps";
 
 interface NextOccurrence {
   from: number;
@@ -60,12 +61,11 @@ export function nextMatchIndex(text: string, pattern: RegExp, from: number): num
 }
 
 function indexOfIn(text: string, needle: string, from: number): number {
-  return text.indexOf(needle, from);
+  return countedIndexOf(text, needle, from);
 }
 
 function matchIndexIn(text: string, pattern: RegExp, from: number): number {
-  pattern.lastIndex = from;
-  return pattern.exec(text)?.index ?? -1;
+  return countedMatchIndex(text, pattern, from);
 }
 
 function nextOccurrence<Needle extends string | RegExp>(
@@ -104,6 +104,7 @@ function pairBrackets(text: string): Map<number, number> {
     if (code === 91) open.push(index);
     else if (code === 93 && open.length > 0) pairs.set(open.pop()!, index);
   }
+  countSteps(text.length);
   return pairs;
 }
 

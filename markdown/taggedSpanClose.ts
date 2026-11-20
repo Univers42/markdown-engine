@@ -7,6 +7,7 @@
 // same whoever asks), so the answer for every content start passed on the way
 // is kept for the scan, and each token is read once per scan and tag.
 import { nextIndexOf, positionAnswers } from "./inlineScanMemo";
+import { countSteps } from "./scanSteps";
 
 type TaggedSpan = {
   readonly text: string;
@@ -30,12 +31,13 @@ export function findMatchingTaggedClose(
   const waiting: number[][] = [[start]];
   let cursor = start;
   for (;;) {
+    countSteps(1);
     const close = known.get(cursor) ?? closeOrInnerStart(span, cursor, waiting);
     if (close === null) {
       cursor = waiting[waiting.length - 1][0];
       continue;
     }
-    for (const at of waiting.pop()!) known.set(at, close);
+    const group = waiting.pop()!; countSteps(group.length); for (const at of group) known.set(at, close);
     if (waiting.length === 0) return close;
     if (close === -1) return settleUnclosed(waiting, known);
     cursor = close + span.closeTag.length;
@@ -54,7 +56,11 @@ function closeOrInnerStart(span: TaggedSpan, cursor: number, waiting: number[][]
 
 // An inner span that never closes leaves every span around it unclosed too.
 function settleUnclosed(waiting: number[][], known: Map<number, number>): number {
-  for (const group of waiting) for (const at of group) known.set(at, -1);
+  countSteps(waiting.length);
+  for (const group of waiting) {
+    countSteps(group.length);
+    for (const at of group) known.set(at, -1);
+  }
   return -1;
 }
 

@@ -8,6 +8,7 @@
 
 import { isAllowedAttributeName } from "./allowlist";
 import { canScanHtml, chargeFailedScan } from "./session";
+import { countSteps, countedIndexOf } from "../scanSteps";
 
 export type HtmlTagToken =
   | { kind: "open"; tag: string; attrs: Map<string, string>; end: number }
@@ -37,6 +38,7 @@ export function scanHtmlAt(text: string, pos: number): HtmlToken | null {
   if (!isLetter(text.charCodeAt(nameStart))) return null;
   let nameEnd = nameStart;
   while (isNameChar(text.charCodeAt(nameEnd))) nameEnd++;
+  countSteps(nameEnd - nameStart);
   if (!endsName(text.charCodeAt(nameEnd))) return null;
   const tag = text.slice(nameStart, nameEnd).toLowerCase();
   const attrs = new Map<string, string>();
@@ -68,7 +70,7 @@ function declarationEnd(text: string, pos: number): number {
 }
 
 function endAfter(text: string, needle: string, from: number): number {
-  const at = text.indexOf(needle, from);
+  const at = countedIndexOf(text, needle, from);
   return at === -1 ? text.length : at + needle.length;
 }
 
@@ -78,10 +80,11 @@ function scanAttributes(text: string, from: number, attrs: Map<string, string>):
   let pos = from;
   while (pos < text.length) {
     const code = text.charCodeAt(pos);
-    if (code === 62) return pos + 1;
+    if (code === 62) { countSteps(pos + 1 - from); return pos + 1; }
     if (isSpace(code) || code === 47) pos++;
     else pos = scanAttribute(text, pos, attrs);
   }
+  countSteps(text.length - from);
   return -1;
 }
 
@@ -122,7 +125,7 @@ function keepAttribute(attrs: Map<string, string>, name: string, value: string):
 
 function droppedContentEnd(text: string, tag: string, from: number): number {
   if (tag === "plaintext") return text.length;
-  for (let at = text.indexOf("</", from); at !== -1; at = text.indexOf("</", at + 2)) {
+  for (let at = countedIndexOf(text, "</", from); at !== -1; at = countedIndexOf(text, "</", at + 2)) {
     const nameEnd = at + 2 + tag.length;
     if (text.slice(at + 2, nameEnd).toLowerCase() === tag && endsName(text.charCodeAt(nameEnd))) {
       return endAfter(text, ">", nameEnd);

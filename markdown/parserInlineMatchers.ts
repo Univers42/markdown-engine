@@ -23,6 +23,7 @@ import { findMatchingTaggedClose } from "./taggedSpanClose";
 import { hostnameFromUrl } from "./urlSugar";
 import { normalizeInlineLinkHref } from "../inlineLinks";
 import { normalizeInlineColorToken } from "../inlineColorTokens";
+import { countSteps, countedIndexOf } from "./scanSteps";
 
 // CommonMark: every ASCII punctuation character is backslash-escapable.
 const ESCAPABLE_PUNCTUATION = /[!-/:-@[-`{-~]/;
@@ -61,7 +62,9 @@ export function containsBareUrlShape(text: string): boolean {
 
 function execSticky(re: RegExp, text: string, pos: number): RegExpExecArray | null {
   re.lastIndex = pos;
-  return re.exec(text);
+  const match = re.exec(text);
+  countSteps(match === null ? 0 : match[0].length);
+  return match;
 }
 
 // `{{NAME | filter:"arg"}}`. The close is searched within VARIABLE_MAX_EXPR chars and
@@ -123,6 +126,7 @@ function matchReversedLink(
   if (text[parenClose + 1] !== "[") return null; // must be `(text)[…]`
   const bracketClose = nextIndexOf(text, "]", parenClose + 2);
   if (bracketClose === -1) return null;
+  countSteps(bracketClose - parenClose - 2);
   const rawUrl = text.slice(parenClose + 2, bracketClose).trim();
   if (!rawUrl) return null; // `(text)[]` is not a link
   const label = text.slice(pos + 1, parenClose);
@@ -182,6 +186,7 @@ function matchPageLink(text: string, pos: number): InlineMatchResult | null {
 /** `url "title"` split — the regex only runs when a trailing quote exists. */
 function splitDestinationTitle(inside: string): { target: string; title?: string } {
   if (inside.charCodeAt(inside.length - 1) !== 34) return { target: inside };
+  countSteps(inside.length);
   const match = /^(.*?)\s+"([^"]*)"$/.exec(inside);
   if (!match) return { target: inside };
   return { target: match[1], title: match[2] };
@@ -216,6 +221,7 @@ function matchFootnoteRef(text: string, pos: number): InlineMatchResult | null {
   if (text[pos + 1] !== "^") return null;
   const close = nextIndexOf(text, "]", pos + 2);
   if (close === -1 || text[close + 1] === "(") return null;
+  countSteps(close - pos - 2);
   const label = text.slice(pos + 2, close);
   if (!label || /\s/.test(label)) return null;
   return {
@@ -274,9 +280,10 @@ function matchTightDelimited(
   while (cursor < text.length) {
     const ch = text[cursor];
     if (ch === delim) break;
-    if (ch === " " || ch === "\t" || ch === "\n") return null;
+    if (ch === " " || ch === "\t" || ch === "\n") { countSteps(cursor - pos); return null; }
     cursor += 1;
   }
+  countSteps(cursor - pos);
   if (cursor >= text.length || cursor === pos + 1) return null;
   return {
     start: pos,
@@ -381,12 +388,14 @@ function matchReferenceLink(
   const labelClose = findClosingBracket(text, pos);
   if (labelClose === -1) return null;
   if (text[labelClose + 1] === "(") return null; // inline `[text](url)` wins
+  countSteps(labelClose - pos - 1);
   const textPart = text.slice(pos + 1, labelClose);
   let refLabel = textPart;
   let end = labelClose + 1;
   if (text[labelClose + 1] === "[") {
     const refClose = nextIndexOf(text, "]", labelClose + 2);
     if (refClose === -1) return null;
+    countSteps(refClose - labelClose - 2);
     const explicit = text.slice(labelClose + 2, refClose);
     if (explicit) refLabel = explicit; // `[text][]` collapses to the text
     end = refClose + 1;
@@ -413,12 +422,14 @@ function matchReferenceImage(
   const altClose = findClosingBracket(text, pos + 1);
   if (altClose === -1) return null;
   if (text[altClose + 1] === "(") return null; // inline `![alt](src)` wins
+  countSteps(altClose - pos - 2);
   const alt = text.slice(pos + 2, altClose);
   let refLabel = alt;
   let end = altClose + 1;
   if (text[altClose + 1] === "[") {
     const refClose = nextIndexOf(text, "]", altClose + 2);
     if (refClose === -1) return null;
+    countSteps(refClose - altClose - 2);
     const explicit = text.slice(altClose + 2, refClose);
     if (explicit) refLabel = explicit;
     end = refClose + 1;
@@ -452,12 +463,14 @@ const CODE_BACKTICK = 96;
 function runLengthAt(text: string, pos: number, ch: string): number {
   let end = pos;
   while (end < text.length && text[end] === ch) end += 1;
+  countSteps(end - pos);
   return end - pos;
 }
 
 function runLengthAtCode(text: string, pos: number, code: number): number {
   let end = pos;
   while (end < text.length && text.charCodeAt(end) === code) end += 1;
+  countSteps(end - pos);
   return end - pos;
 }
 
@@ -495,6 +508,7 @@ function wrapEmphasis(
     take % 2 === 1
       ? { type: "italic", children }
       : wrapEmphasis(marker, 2, children);
+  countSteps(Math.floor(take / 2) - (take % 2 === 1 ? 0 : 1));
   for (let pairs = Math.floor(take / 2) - (take % 2 === 1 ? 0 : 1); pairs > 0; pairs -= 1) {
     node = wrapEmphasis(marker, 2, [node]);
   }
@@ -509,7 +523,7 @@ interface EmphasisSegment {
 /** Skip a balanced backtick code span during the closer scan (code binds tighter). */
 function skipCodeSpan(text: string, cursor: number): number {
   const ticks = runLengthAt(text, cursor, "`");
-  const close = text.indexOf("`".repeat(ticks), cursor + ticks);
+  const close = countedIndexOf(text, "`".repeat(ticks), cursor + ticks);
   return close === -1 ? cursor + ticks : close + ticks;
 }
 
@@ -530,7 +544,7 @@ function matchStackedEmphasis(
 
   const failedSet = unclosableOpeners(text, marker);
   if (failedSet.has(pos)) return null;
-  if (text.indexOf(marker, pos + openLen) === -1) {
+  if (countedIndexOf(text, marker, pos + openLen) === -1) {
     failedSet.add(pos);
     return null;
   }
@@ -556,12 +570,12 @@ function matchStackedEmphasis(
   while (cursor < length && remaining > 0) {
     // Native scans between marker candidates — an escape or a backtick before
     // the next marker is handled first, then the candidate run is classified.
-    const next = text.indexOf(marker, cursor);
+    const next = countedIndexOf(text, marker, cursor);
     if (next === -1) break;
     // Whichever interruption comes FIRST wins — a backslash inside a code
     // span is not an escape, and vice versa.
-    if (escapeAt !== -1 && escapeAt < cursor) escapeAt = text.indexOf("\\", cursor);
-    if (backtickAt !== -1 && backtickAt < cursor) backtickAt = text.indexOf("`", cursor);
+    if (escapeAt !== -1 && escapeAt < cursor) escapeAt = countedIndexOf(text, "\\", cursor);
+    if (backtickAt !== -1 && backtickAt < cursor) backtickAt = countedIndexOf(text, "`", cursor);
     const escape = escapeAt;
     const backtick = backtickAt;
     if (escape !== -1 && escape < next && (backtick === -1 || escape < backtick)) {
@@ -610,6 +624,7 @@ function matchStackedEmphasis(
 
   if (firstContent === null || firstContent.length === 0) {
     failedSet.add(pos);
+    countSteps(openersSeen.length);
     for (let i = 0; i < openersSeen.length; i++) {
       failedSet.add(openersSeen[i]);
     }
@@ -619,6 +634,7 @@ function matchStackedEmphasis(
   let node = wrapEmphasis(marker, firstTake, parseInline(firstContent));
   let consumed = firstTake;
   if (extraSegments) {
+    countSteps(extraSegments.length);
     for (const segment of extraSegments) {
       node = wrapEmphasis(marker, segment.take, [
         node,
@@ -654,6 +670,7 @@ function matchTaggedInlineColor(
   // The color lands in a style="" attribute, and page text is written by other
   // members: an unchecked value like `red" onanimationstart="…` was stored XSS.
   // Only hex and the known aliases parse; anything else stays literal text.
+  countSteps(bracketEnd - pos - opener.length);
   const color = normalizeInlineColorToken(text.slice(pos + opener.length, bracketEnd));
   if (!color) return null;
   const inner = text.slice(start, end);
@@ -700,9 +717,10 @@ function findDestinationClose(text: string, start: number): number {
       continue;
     }
     if (char !== ")") continue;
-    if (depth === 0) return cursor;
+    if (depth === 0) { countSteps(cursor - start + 1); return cursor; }
     depth--;
   }
+  countSteps(text.length - start);
   return -1;
 }
 
@@ -731,8 +749,9 @@ export function createInlineDispatch(
         ticks++;
         i++;
       }
+      countSteps(ticks);
       const closePattern = ticks === 1 ? "`" : "`".repeat(ticks);
-      const closeIdx = text.indexOf(closePattern, i);
+      const closeIdx = countedIndexOf(text, closePattern, i);
       if (closeIdx === -1) return null;
       if (closeIdx + ticks < text.length && text[closeIdx + ticks] === "`")
         return null;
@@ -755,7 +774,7 @@ export function createInlineDispatch(
     }),
     defineMatcher(["$"], (text, pos) => {
       if (text[pos] !== "$" || text[pos + 1] === "$") return null;
-      const close = text.indexOf("$", pos + 1);
+      const close = countedIndexOf(text, "$", pos + 1);
       if (close === -1 || close === pos + 1) return null;
       return {
         start: pos,
@@ -881,6 +900,7 @@ export function createInlineDispatch(
       if (text[pos] !== "<") return null;
       const close = nextIndexOf(text, ">", pos + 1);
       if (close === -1) return null;
+      countSteps(close - pos - 1);
       const inner = text.slice(pos + 1, close);
       if (/^https?:\/\//.test(inner)) {
         return {

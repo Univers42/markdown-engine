@@ -11,6 +11,7 @@ import { isInlineNode, type BlockNode, type HtmlElementShape, type InlineNode } 
 import { HEADINGS, PHRASING_TAGS, VOID_TAGS, filterAttributes } from "./allowlist";
 import { MAX_HTML_DEPTH, htmlDepthBase, takeHtmlElements } from "./session";
 import type { HtmlTagToken } from "./tokenizer";
+import { countSteps } from "../scanSteps";
 
 export type HtmlChild = InlineNode | BlockNode;
 
@@ -197,10 +198,12 @@ export function unwrapAnchors(nodes: HtmlChild[]): void {
   const flat: HtmlChild[] = [];
   for (const node of nodes) appendUnwrapped(flat, node);
   nodes.length = 0;
+  countSteps(flat.length);
   for (const node of flat) nodes.push(node);
 }
 
 function appendUnwrapped(out: HtmlChild[], node: HtmlChild): void {
+  countSteps(1);
   if (node.type === "link" || (node.type === "html_element" && node.tag === "a")) {
     for (const child of node.children) appendUnwrapped(out, child);
   } else if (node.type === "footnote_ref") {

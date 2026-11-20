@@ -21,6 +21,7 @@ import { htmlDepthBase, isHtmlSubsetActive, setHtmlDepthBase } from './htmlSubse
 import { inlineHtmlTree, unwrapAnchors, type HtmlTreeBuilder } from './htmlSubset/tree';
 import { enterNesting, leaveNesting } from './nestingDepth';
 import { enterScan, leaveScan } from './inlineScanMemo';
+import { countSteps } from './scanSteps';
 
 export { slugify } from './parserInlineUtils';
 
@@ -123,6 +124,7 @@ function scanText(text: string, mode: InlineMode): InlineNode[] {
     else if (code === 60 && html) pos = takeHtmlTag(scan, pos, html);
     else pos = takeMatch(scan, pos, mode.dispatch[text[pos]], html);
   }
+  countSteps(text.length);
   appendRun(scan.nodes, text, scan.runStart, text.length);
   // finish() closes the open elements through the flush hook: nothing is left to flush.
   scan.runStart = scan.tagStart = text.length;

@@ -1,31 +1,37 @@
 "use strict";
 
-// U3-6: the README HTML subset renders in linear time. Each input is parsed and
-// rendered at 50 KB and at 200 KB (the subset's input cap); the 200 KB time must
-// stay within 5x the 50 KB time (4x is linear) and inside the same absolute
-// budget as emphasis-runs. Each time is the fastest of RUNS, after one warm-up,
-// so a GC pause or a JIT tier-up does not decide the ratio.
+// U3-6: the README HTML subset renders in linear work. Each input is parsed and
+// rendered once at 50 KB and at 200 KB (the subset's input cap), each first
+// render in a fresh worker thread stopped at DEADLINE_MS (BUDGET_MS plus
+// PROBE_SLACK_MS for the message round trip): a render that is too slow, or
+// never ends, fails its test naming the input, the size and the deadline
+// instead of hanging the job. The linearity gate itself is on counted steps,
+// never on wall clock: a render's steps are the characters its native scans
+// examined plus its counted loops (markdown/scanSteps.ts), deterministic for
+// an input — the same total on an idle laptop and a loaded CI runner — so
+// 200 KB / 50 KB staying within T_STEPS says the WORK grew with the size, not
+// the seconds. Wall-clock time appears only in the deadline and the MS lines.
 //
-// Measured 2026-11-17, node 22, docker --network none, `node --test
-// bench/html-subset-linear.test.cjs` (fastest of 7 batches, ms at 50 KB -> 200 KB):
-//   readme 4.09 -> 9.74 (2.38x, the 5,000-element cap turns the rest to text)
-//   div soup 1.91 -> 7.88 (4.14x)        stray closers 0.62 -> 2.27 (3.66x)
-//   no closing > 2.22 -> 9.15 (4.11x)    unclosed quote 2.01 -> 8.12 (4.05x)
-//   entity soup 1.80 -> 7.17 (3.99x)     comment opens 0.14 -> 0.58 (4.10x)
-//   less-than soup 6.18 -> 25.33 (4.10x) attribute soup 3.38 -> 13.61 (4.02x)
-// Caveat: a wall-clock ratio. A 50 KB time under a few ms makes the ratio noisy
-// (timer and GC granularity), so a flake here is re-run once before it is read
-// as quadratic; a real O(n^2) shows as ~16x, far past the 5x line.
+// Caveat: (a) only counted sites are counted, and the scan census pins counts,
+// not bounds, so a wider bound at an existing site passes; (b) regex
+// backtracking inside one exec counts as its matched span only (the email
+// regex is quadratic and under-counted); (c) renderer, allocation and GC work
+// is not counted and is bounded only by the deadline; (d) the MS lines are
+// diagnostics, read and never re-run as a gate.
+// (e) plain-mode quote nests count nothing at all (UNCOUNTED below): only the
+// deadline bounds them.
+//
+// T_STEPS = 5 is provisional until the D8/D10 runs fix it (ADR 0068 D9).
 const test = require("node:test");
 const assert = require("node:assert");
-const { loadMarkengineInRealm } = require("../tests/support/loadMarkengine.cjs");
+const path = require("node:path");
+const { Worker } = require("node:worker_threads");
 
-const E = loadMarkengineInRealm("index.ts");
-const R = loadMarkengineInRealm("react.tsx");
 const BUDGET_MS = 3000;
-const MAX_RATIO = 5;
-const RUNS = 7;
-const SAMPLE_MS = 20;
+const PROBE_SLACK_MS = 500;
+const DEADLINE_MS = BUDGET_MS + PROBE_SLACK_MS;
+const PROBE_START_MS = 60000;
+const T_STEPS = 5;
 const SMALL = 50 * 1024;
 const LARGE = 200 * 1024;
 
@@ -76,50 +82,106 @@ function repeatToBytes(unit, bytes) {
   return unit.repeat(Math.max(copies, 1));
 }
 
-function renderOnce(source, htmlSubset = true) {
-  if (!htmlSubset) return void R.renderReact(E.parse(source));
-  R.renderReact(E.parse(source, { htmlSubset: true }), { htmlSubset: { mediaPrefixes: [] } });
+// The R1 probe: one first render in its own worker, stopped at DEADLINE_MS and
+// reporting { timedOut, ms, steps, bundle }. A fresh worker per render, so no
+// JIT-warm state and no module cache crosses probes.
+function startProbeWorker() {
+  const worker = new Worker(path.join(__dirname, "first-render-worker.cjs"));
+  let startTimer;
+  const ready = new Promise((resolve, reject) => {
+    startTimer = setTimeout(() => reject(new Error("first-render worker did not start within 60000 ms")), PROBE_START_MS);
+    worker.once("message", (message) => {
+      if (message.type === "ready") resolve();
+    });
+    worker.once("error", reject);
+    worker.once("exit", (code) => reject(new Error(`first-render worker exited with code ${code}`)));
+  });
+  return { worker, ready: ready.finally(() => clearTimeout(startTimer)) };
 }
 
-// An editor hands the parser a new string per keystroke: every render gets its
-// own equal-content copy, so a cache keyed by content cannot time a hit.
-const freshCopy = (source) => Buffer.from(source, "utf8").toString("utf8");
-
-function batchMs(source, batch, htmlSubset) {
-  const copies = Array.from({ length: batch }, () => freshCopy(source));
-  const started = performance.now();
-  for (const copy of copies) renderOnce(copy, htmlSubset);
-  return (performance.now() - started) / batch;
+function timeRenderInWorker(worker, source, htmlSubset) {
+  let deadlineTimer;
+  const timed = new Promise((resolve, reject) => {
+    worker.once("message", (message) => {
+      if (message.type === "done") resolve({ timedOut: false, ms: message.ms, steps: message.steps, bundle: message.bundle });
+    });
+    worker.once("error", reject);
+    worker.once("exit", (code) => reject(new Error(`first-render worker exited with code ${code}`)));
+    worker.postMessage({ source, htmlSubset });
+    deadlineTimer = setTimeout(() => resolve({ timedOut: true }), DEADLINE_MS);
+  });
+  return timed.finally(() => clearTimeout(deadlineTimer));
 }
 
-// A render under a millisecond is timed as a batch of SAMPLE_MS, so the timer's
-// granularity does not decide the ratio. A warm-up past the budget is the answer:
-// a quadratic input fails on it instead of being timed RUNS more times.
-function fastestMs(source, htmlSubset = true) {
-  const warmUp = batchMs(source, 1, htmlSubset);
-  if (warmUp > BUDGET_MS) return warmUp;
-  const batch = Math.max(1, Math.ceil(SAMPLE_MS / Math.max(warmUp, 0.01)));
-  let best = Infinity;
-  for (let run = 0; run < RUNS; run++) best = Math.min(best, batchMs(source, batch, htmlSubset));
-  return best;
+async function probeRender(source, htmlSubset) {
+  const { worker, ready } = startProbeWorker();
+  try {
+    await ready;
+    return await timeRenderInWorker(worker, source, htmlSubset);
+  } finally {
+    await worker.terminate();
+  }
 }
 
-function assertLinear(t, name, build, htmlSubset) {
+// One bundle per realm (D6): the first worker's evidence is reported once, and
+// every later worker must report the same digest — a second bundle would be a
+// second scanSteps instance with the steps split between realms. A mismatch
+// fails the test by throwing, so the assert lines stay exactly the gates (a-c),
+// the input cap and the DEEP checks.
+let firstBundle = null;
+
+function checkBundle(t, bundle) {
+  if (firstBundle === null) {
+    firstBundle = bundle;
+    t.diagnostic(`BUNDLE ${bundle.file} sha256:${bundle.sha256}`);
+  } else if (bundle.sha256 !== firstBundle.sha256) {
+    throw new Error(`two bundles in one run: ${firstBundle.file} sha256:${firstBundle.sha256}, then ${bundle.file} sha256:${bundle.sha256}`);
+  }
+}
+
+// Plain-mode quote nests do no counted work: the block-quote strip
+// (markdown/parserBlockQuote.ts) is no counted site, and past MAX_NESTING_DEPTH
+// the rest is kept as source text with no inline parse (parserBlockContext.ts).
+// Subset mode counts them through its UTF-8 cap walk. These labels are held to
+// exactly 0 steps, so the day a site starts counting them the gate says so and
+// they move back under the ratio; until then the deadline is their only bound.
+const UNCOUNTED = new Set(["quote nest (plain)", "quote x2000 (4 KB) (plain)"]);
+
+// Gate (b): the counter saw the work, or saw none at all for an UNCOUNTED label.
+function assertCounted(label, ...steps) {
+  if (!UNCOUNTED.has(label)) {
+    assert.ok(steps.every((n) => n > 0), `${label}: the counter saw no work (steps ${steps.join(", ")}; D6)`);
+    return;
+  }
+  assert.ok(steps.every((n) => n === 0), `${label}: listed UNCOUNTED but counted ${steps.join(", ")} steps; drop it from UNCOUNTED`);
+}
+
+// The gates (D7): (a) neither first render passed the deadline; (b) the
+// counter saw the work; (c) the 200 KB / 50 KB step ratio stays within
+// T_STEPS. No wall-clock ratio, no absolute time budget, anywhere.
+async function assertLinear(t, label, build, htmlSubset) {
   const small = build(SMALL);
   const large = build(LARGE);
   // Under the cap the parse is never refused (U3-5 class h), so this is the real work.
   assert.ok(Buffer.byteLength(large, "utf8") <= LARGE, "the large input stays under the input cap");
-  const smallMs = fastestMs(small, htmlSubset);
-  const largeMs = fastestMs(large, htmlSubset);
-  const ratio = largeMs / smallMs;
-  t.diagnostic(`${name}: 50 KB ${smallMs.toFixed(2)} ms, 200 KB ${largeMs.toFixed(2)} ms, ratio ${ratio.toFixed(2)}`);
-  assert.ok(largeMs < BUDGET_MS, `${name}: 200 KB took ${largeMs.toFixed(1)} ms`);
-  assert.ok(ratio <= MAX_RATIO, `${name}: 200 KB / 50 KB = ${ratio.toFixed(2)}`);
+  const smallProbe = await probeRender(small, htmlSubset);
+  const largeProbe = await probeRender(large, htmlSubset);
+  assert.ok(!smallProbe.timedOut, `${label}: the 50 KB first render passed its ${DEADLINE_MS} ms deadline (worker stopped)`);
+  assert.ok(!largeProbe.timedOut, `${label}: the 200 KB first render passed its ${DEADLINE_MS} ms deadline (worker stopped); 200 KB / 50 KB >= ${(DEADLINE_MS / smallProbe.ms).toFixed(1)}`);
+  assertCounted(label, smallProbe.steps, largeProbe.steps);
+  checkBundle(t, smallProbe.bundle);
+  checkBundle(t, largeProbe.bundle);
+  if (UNCOUNTED.has(label)) return t.diagnostic(`STEPS ${label} uncounted (deadline only)`);
+  const ratio = largeProbe.steps / smallProbe.steps;
+  const lenRatio = Buffer.byteLength(large, "utf8") / Buffer.byteLength(small, "utf8");
+  t.diagnostic(`STEPS ${label} small=${smallProbe.steps} large=${largeProbe.steps} ratio=${ratio.toFixed(2)} len=${lenRatio.toFixed(2)}`);
+  t.diagnostic(`MS ${label} small=${smallProbe.ms.toFixed(1)} large=${largeProbe.ms.toFixed(1)}`);
+  assert.ok(ratio <= T_STEPS, `${label}: steps 200 KB / 50 KB = ${ratio.toFixed(2)} > T_STEPS ${T_STEPS} (length ratio ${lenRatio.toFixed(2)})`);
 }
 
 for (const [name, unit] of Object.entries(INPUTS)) {
-  test(`U3-6 ${name}: 200 KB renders within ${MAX_RATIO}x the 50 KB time, under ${BUDGET_MS} ms`, (t) => {
-    assertLinear(t, name, (bytes) => repeatToBytes(unit, bytes), true);
+  test(`U3-6 ${name}: steps 200 KB / 50 KB within ${T_STEPS}x, first renders inside the ${DEADLINE_MS} ms deadline`, async (t) => {
+    await assertLinear(t, name, (bytes) => repeatToBytes(unit, bytes), true);
   });
 }
 
@@ -163,8 +225,8 @@ const SPAN_SHAPES = {
 for (const [name, build] of Object.entries(SPAN_SHAPES)) {
   for (const htmlSubset of [false, true]) {
     const label = `${name} (${htmlSubset ? "subset" : "plain"})`;
-    test(`U3-6 ${label}: 200 KB renders within ${MAX_RATIO}x the 50 KB time, under ${BUDGET_MS} ms`, (t) => {
-      assertLinear(t, label, build, htmlSubset);
+    test(`U3-6 ${label}: steps 200 KB / 50 KB within ${T_STEPS}x, first renders inside the ${DEADLINE_MS} ms deadline`, async (t) => {
+      await assertLinear(t, label, build, htmlSubset);
     });
   }
 }
@@ -177,7 +239,13 @@ const DEEP_INPUTS = {
 };
 
 for (const [name, source] of Object.entries(DEEP_INPUTS)) {
-  test(`U3-6 ${name} parses and renders without throwing`, () => {
-    for (const htmlSubset of [false, true]) renderOnce(source, htmlSubset);
+  test(`U3-6 ${name} parses and renders without throwing`, async (t) => {
+    for (const htmlSubset of [false, true]) {
+      const label = `${name} (${htmlSubset ? "subset" : "plain"})`;
+      const probe = await probeRender(source, htmlSubset);
+      assert.ok(!probe.timedOut, `${label}: the first render passed its ${DEADLINE_MS} ms deadline (worker stopped)`);
+      assertCounted(label, probe.steps);
+      checkBundle(t, probe.bundle);
+    }
   });
 }

@@ -9,6 +9,12 @@
 // Caveat: only counted sites are counted (the census in scripts/ pins how many raw
 // scans remain, not how far each runs). A regex exec counts its span only, never
 // its backtracking. Renderer, allocation and GC work is not counted.
+// Caveat: a sticky regex miss counts 0, not its span (under-report): execSticky in
+// parserInlineMatchers.ts counts a match's length only, so `":" + "a".repeat(50000)`
+// walks 50000 emoji-name characters and adds 0. It stays linear today because a
+// later ':' ends the run. countedMatchIndex's sticky branch has no caller; a sticky
+// miss there would be charged text.length - from for one examined position
+// (over-report).
 
 // A Float64Array slot, not a `let`: one 10K-char inline parse counts ~971K steps,
 // so a never-reset count passes 2^31 - 1 after ~2,200 parses. Past that a `let`

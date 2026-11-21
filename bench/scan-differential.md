@@ -6,7 +6,7 @@ or a render tree is a behaviour change hiding inside the perf work.
 
 ## What it compares
 
-`scripts/scan-differential.cjs` extracts the base tree `b6dc3fd` into
+`bench/scan-differential.cjs` extracts the base tree `b6dc3fd` into
 `node_modules/.cache/scan-diff/base` (`git archive | tar -x`, rebuilt every
 run), bundles `index.ts` and `react.tsx` from BOTH roots with the loader's
 exact esbuild options (`tests/support/loadMarkengine.cjs` — bundle, platform
@@ -54,7 +54,7 @@ to clean.
 
 Not wired into `npm test` or `npm run quality`; it runs on demand:
 
-    timeout 1800 node scripts/scan-differential.cjs
+    timeout 1800 node bench/scan-differential.cjs
 
 ## Last run
 

@@ -131,3 +131,23 @@ test("findClosingParen matches the destination walk from every link's \"(\", in 
     });
   }
 });
+
+// What an autolink's ">" is: the first of whitespace, "<" or ">" after the "<", if it is a ">".
+function autolinkCloseByWalk(text, from) {
+  for (let index = Math.max(from, 0); index < text.length; index++) {
+    if (/[\s<>]/.test(text[index])) return text[index] === ">" ? index : -1;
+  }
+  return -1;
+}
+
+test("findAutolinkClose stops at the first whitespace, \"<\" or \">\", for rising and random positions", () => {
+  const random = createRandom(0xa7011);
+  for (let round = 0; round < 400; round++) {
+    const text = randomText(random, ["a", "<", ">", " ", "\n", "\u00a0", "@."], 1 + Math.floor(random() * 80));
+    withScan(text, () => {
+      for (const from of positions(random, text, round % 2 === 0)) {
+        assert.strictEqual(M.findAutolinkClose(text, from), autolinkCloseByWalk(text, from), `${JSON.stringify(text)} @${from}`);
+      }
+    });
+  }
+});

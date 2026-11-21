@@ -19,6 +19,7 @@ import type {
 } from "./parserInlineTypes";
 import { EMOJI_MAP } from "./parserEmoji";
 import {
+  findAutolinkClose,
   findClosingBracket,
   findClosingParen,
   nextIndexOf,
@@ -234,6 +235,25 @@ function matchFootnoteRef(text: string, pos: number): InlineMatchResult | null {
     start: pos,
     end: close + 1,
     node: { type: "footnote_ref", label },
+  };
+}
+
+// `<https://…>` and `<name@host.tld>`. The close search stopped only at ">", then
+// ran two regexes over the content, for every "<": "<" x n then ">" was quadratic
+// (7 s at 128K chars), and the email regex backtracked over "<a@" + "b." x n + " >"
+// (3.2 s). findAutolinkClose stops at the first whitespace or "<", which CommonMark
+// forbids inside an autolink, so `<http://a b>` is now text.
+function matchAutolink(text: string, pos: number): InlineMatchResult | null {
+  const close = findAutolinkClose(text, pos + 1);
+  if (close === -1) return null;
+  countSteps(close - pos - 1);
+  const isUrl = text.startsWith("http://", pos + 1) || text.startsWith("https://", pos + 1);
+  const inner = text.slice(pos + 1, close);
+  if (!isUrl && !isEmailAutolink(inner)) return null;
+  return {
+    start: pos,
+    end: close + 1,
+    node: { type: "link", href: isUrl ? inner : `mailto:${inner}`, children: [{ type: "text", value: inner }] },
   };
 }
 
@@ -936,36 +956,7 @@ export function createInlineDispatch(
       };
     }),
     defineMatcher(["<"], (text, pos) => matchInlineHtmlTag(text, pos, parseInline)),
-    defineMatcher(["<"], (text, pos) => {
-      if (text[pos] !== "<") return null;
-      const close = nextIndexOf(text, ">", pos + 1);
-      if (close === -1) return null;
-      countSteps(close - pos - 1);
-      const inner = text.slice(pos + 1, close);
-      if (/^https?:\/\//.test(inner)) {
-        return {
-          start: pos,
-          end: close + 1,
-          node: {
-            type: "link",
-            href: inner,
-            children: [{ type: "text", value: inner }],
-          },
-        };
-      }
-      if (isEmailAutolink(inner)) {
-        return {
-          start: pos,
-          end: close + 1,
-          node: {
-            type: "link",
-            href: `mailto:${inner}`,
-            children: [{ type: "text", value: inner }],
-          },
-        };
-      }
-      return null;
-    }),
+    defineMatcher(["<"], matchAutolink),
     defineMatcher(["("], (text, pos) => matchReversedLink(text, pos, parseInline)),
     defineMatcher(["h", "w"], matchBareUrl),
   ];

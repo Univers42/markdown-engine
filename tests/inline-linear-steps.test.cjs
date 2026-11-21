@@ -7,13 +7,16 @@
 // cost at most RATIO_LIMIT times the steps.
 //
 // RATIO_LIMIT = 4.5 (devil ruling on #321, IM2). At engine 9ff30b1 the linear
-// shapes read 4.00 and "[a](" x n 15.99.
+// shapes read 4.00, "<" x n then ">" read 16.00 (plain) and "[a](" x n 15.99.
 //
 // Caveat: only counted sites are counted, and a regex counts its matched span,
-// never its backtracking.
+// never its backtracking. The email shape read 4.00 at 9ff30b1 while its time
+// grew 16x, so its test guards the linear check that replaced the regex, not the
+// regex itself.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadMarkengine } = require("./support/loadMarkengine.cjs");
+const { createRandom } = require("./support/seededRandom.cjs");
 
 const E = loadMarkengine("tests/support/inlineStepsEntry.ts");
 const SMALL = 32 * 1024;
@@ -26,6 +29,8 @@ function repeatTo(length, unit, tail = "") {
 }
 
 const SHAPES = {
+  '"<" x n then ">"': (length) => repeatTo(length, "<", ">"),
+  'email autolink, "b." x n then " >"': (length) => "<a@" + repeatTo(length, "b.", " >").slice(3),
   'unclosed links "[a](" x n': (length) => repeatTo(length, "[a]("),
   'emphasis openers "*a " x n': (length) => repeatTo(length, "*a "),
   'unclosed "[" x n': (length) => repeatTo(length, "["),
@@ -56,3 +61,31 @@ for (const [name, build] of Object.entries(SHAPES)) {
     test(`${label}: steps 128K / 32K within ${RATIO_LIMIT}x`, (t) => assertLinear(t, label, build, htmlSubset));
   }
 }
+
+// The plain "<" autolink before osionos#321, restricted to content with no
+// whitespace or "<" (the close search now stops there, so such text is no link).
+const OLD_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function expectedAutolink(inner) {
+  if (/[\s<>]/.test(inner)) return null;
+  if (/^https?:\/\//.test(inner)) return inner;
+  return OLD_EMAIL.test(inner) ? `mailto:${inner}` : null;
+}
+
+function autolinkHref(nodes, inner) {
+  const [node] = nodes;
+  if (nodes.length !== 1 || node.type !== "link") return null;
+  return node.children.length === 1 && node.children[0].value === inner ? node.href : null;
+}
+
+test("a plain <…> is an autolink exactly when the old URL or email rule holds and nothing stops the scan", () => {
+  const random = createRandom(0xe3a11);
+  const alphabet = ["a", "b", "@", ".", "http://", "https://", " ", "<", "\t", "..", "@@"];
+  for (let round = 0; round < 600; round++) {
+    let inner = "";
+    const parts = Math.floor(random() * 8);
+    for (let part = 0; part < parts; part++) inner += alphabet[Math.floor(random() * alphabet.length)];
+    const nodes = parseOnce(`<${inner}>`, false);
+    assert.strictEqual(autolinkHref(nodes, inner), expectedAutolink(inner), JSON.stringify(inner));
+  }
+});

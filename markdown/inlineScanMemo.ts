@@ -137,6 +137,16 @@ function pairParens(text: string): Map<number, number> {
   return pairs;
 }
 
+// CommonMark allows no whitespace, "<" or ">" inside an autolink, so the first of
+// them ends one: a ">" closes it, anything else means there is no autolink here.
+const AUTOLINK_STOP = /[\s<>]/g;
+
+/** The ">" closing an autolink whose content starts at `from`, or -1. */
+export function findAutolinkClose(text: string, from: number): number {
+  const stop = nextMatchIndex(text, AUTOLINK_STOP, from);
+  return stop !== -1 && text.charCodeAt(stop) === 62 ? stop : -1;
+}
+
 /** The openers of one emphasis marker already known not to close in this scan. */
 export function unclosableOpeners(text: string, marker: string): Set<number> {
   const scan = frameFor(text);

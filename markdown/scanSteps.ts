@@ -10,18 +10,29 @@
 // scans remain, not how far each runs). A regex exec counts its span only, never
 // its backtracking. Renderer, allocation and GC work is not counted.
 
-let steps = 0;
+// A Float64Array slot, not a `let`: one 10K-char inline parse counts ~971K steps,
+// so a never-reset count passes 2^31 - 1 after ~2,200 parses. Past that a `let`
+// holds a heap number and every add allocates one: "parse inline mixed 10K chars"
+// went from on par to +16 % at that parse (d4-ab +13.4 %, ADR 0068 D4). The slot
+// adds in place and stays exact to 2^53.
+const counter = new Float64Array(1);
 
+// The clamp indexOf applies to `from` (NaN and negatives to 0, past the end to the
+// end), as compares: Number.isNaN + Math.max + Math.min cost ~2 points of that case.
 function scanStart(text: string, from: number): number {
-  const nativeFrom = Number.isNaN(from) ? 0 : from;
-  return Math.min(Math.max(nativeFrom, 0), text.length);
+  const length = text.length;
+  return from > 0 ? (from < length ? from : length) : 0;
+}
+
+/** The span `text.indexOf(needle, from)` examined to answer `at`; counts nothing. */
+export function indexOfSpan(text: string, needle: string, from: number, at: number): number {
+  return (at === -1 ? text.length : at + needle.length) - scanStart(text, from);
 }
 
 /** Returns `text.indexOf(needle, from)` and counts the examined span. */
 export function countedIndexOf(text: string, needle: string, from: number): number {
-  const start = scanStart(text, from);
   const at = text.indexOf(needle, from);
-  steps += at === -1 ? text.length - start : at - start + needle.length;
+  counter[0] += indexOfSpan(text, needle, from, at);
   return at;
 }
 
@@ -34,16 +45,16 @@ export function countedMatchIndex(text: string, pattern: RegExp, from: number): 
   pattern.lastIndex = from;
   const match = pattern.exec(text);
   if (match === null) {
-    steps += text.length - start;
+    counter[0] += text.length - start;
     return -1;
   }
-  steps += match.index - start + match[0].length;
+  counter[0] += match.index - start + match[0].length;
   return match.index;
 }
 
-// The throw lives in its own function and the check is two compares: with the
-// throw and Number.isInteger in place, "parse inline mixed 10K chars" ran +14.4 % over the
-// uncounted engine; moved out, +3.1 % (ADR 0068 D4, d4-ab, 2026-11-20).
+// The throw lives in its own function so countSteps stays two compares and an add.
+// The +14.4 % -> +3.1 % once credited to this move was measured at 300 ms per case,
+// below the 2^31 crossing above; the crossing was the cost (ADR 0068 D4).
 function refuseSteps(n: number): never {
   throw new RangeError(`countSteps needs a non-negative integer, got ${n}`);
 }
@@ -51,15 +62,15 @@ function refuseSteps(n: number): never {
 /** Adds a native scan loop's explicitly reported step count. */
 export function countSteps(n: number): void {
   if (!(n >= 0) || n % 1 !== 0) refuseSteps(n);
-  steps += n;
+  counter[0] += n;
 }
 
 /** Returns the steps counted since the last reset. */
 export function readSteps(): number {
-  return steps;
+  return counter[0];
 }
 
 /** Resets the step counter. */
 export function resetSteps(): void {
-  steps = 0;
+  counter[0] = 0;
 }

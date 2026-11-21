@@ -23,7 +23,7 @@ import { findMatchingTaggedClose } from "./taggedSpanClose";
 import { hostnameFromUrl } from "./urlSugar";
 import { normalizeInlineLinkHref } from "../inlineLinks";
 import { normalizeInlineColorToken } from "../inlineColorTokens";
-import { countSteps, countedIndexOf } from "./scanSteps";
+import { countSteps, countedIndexOf, indexOfSpan } from "./scanSteps";
 
 // CommonMark: every ASCII punctuation character is backslash-escapable.
 const ESCAPABLE_PUNCTUATION = /[!-/:-@[-`{-~]/;
@@ -467,10 +467,11 @@ function runLengthAt(text: string, pos: number, ch: string): number {
   return end - pos;
 }
 
+// Counts nothing: matchStackedEmphasis, its one caller, adds every run itself and
+// batches the loop's into one countSteps (ADR 0068 D4).
 function runLengthAtCode(text: string, pos: number, code: number): number {
   let end = pos;
   while (end < text.length && text.charCodeAt(end) === code) end += 1;
-  countSteps(end - pos);
   return end - pos;
 }
 
@@ -537,6 +538,7 @@ function matchStackedEmphasis(
   const isStar = markerCode === 42;
   if (pos > 0 && text.charCodeAt(pos - 1) === markerCode) return null; // run interior
   const openLen = runLengthAtCode(text, pos, markerCode);
+  countSteps(openLen);
   const length = text.length;
   if (pos + openLen >= length) return null;
   if (isWhitespaceCode(text.charCodeAt(pos + openLen))) return null; // opener can't precede space
@@ -544,7 +546,11 @@ function matchStackedEmphasis(
 
   const failedSet = unclosableOpeners(text, marker);
   if (failedSet.has(pos)) return null;
-  if (countedIndexOf(text, marker, pos + openLen) === -1) {
+  const firstMarker = text.indexOf(marker, pos + openLen);
+  // The loop's scans and runs add here and are counted once after it.
+  let scanned = indexOfSpan(text, marker, pos + openLen, firstMarker);
+  if (firstMarker === -1) {
+    countSteps(scanned);
     failedSet.add(pos);
     return null;
   }
@@ -570,12 +576,19 @@ function matchStackedEmphasis(
   while (cursor < length && remaining > 0) {
     // Native scans between marker candidates — an escape or a backtick before
     // the next marker is handled first, then the candidate run is classified.
-    const next = countedIndexOf(text, marker, cursor);
+    const next = text.indexOf(marker, cursor);
+    scanned += indexOfSpan(text, marker, cursor, next);
     if (next === -1) break;
     // Whichever interruption comes FIRST wins — a backslash inside a code
     // span is not an escape, and vice versa.
-    if (escapeAt !== -1 && escapeAt < cursor) escapeAt = countedIndexOf(text, "\\", cursor);
-    if (backtickAt !== -1 && backtickAt < cursor) backtickAt = countedIndexOf(text, "`", cursor);
+    if (escapeAt !== -1 && escapeAt < cursor) {
+      escapeAt = text.indexOf("\\", cursor);
+      scanned += indexOfSpan(text, "\\", cursor, escapeAt);
+    }
+    if (backtickAt !== -1 && backtickAt < cursor) {
+      backtickAt = text.indexOf("`", cursor);
+      scanned += indexOfSpan(text, "`", cursor, backtickAt);
+    }
     const escape = escapeAt;
     const backtick = backtickAt;
     if (escape !== -1 && escape < next && (backtick === -1 || escape < backtick)) {
@@ -589,6 +602,7 @@ function matchStackedEmphasis(
     cursor = next;
 
     const runLen = runLengthAtCode(text, cursor, markerCode);
+    scanned += runLen;
     const before = text.charCodeAt(cursor - 1);
     const after = text.charCodeAt(cursor + runLen); // NaN past the end
     const canClose = !isWhitespaceCode(before) && (isStar || !isWordCode(after));
@@ -621,6 +635,7 @@ function matchStackedEmphasis(
     }
     cursor += runLen;
   }
+  countSteps(scanned);
 
   if (firstContent === null || firstContent.length === 0) {
     failedSet.add(pos);

@@ -45,6 +45,38 @@ test("a negative start counts from 0", () => {
   assert.equal(S.readSteps(), 3);
 });
 
+test("a NaN start counts from 0 and an infinite one adds nothing", () => {
+  S.resetSteps();
+  assert.equal(S.countedIndexOf("abcabc", "c", Number.NaN), 2);
+  assert.equal(S.readSteps(), 3);
+  assert.equal(S.countedIndexOf("abc", "a", Number.POSITIVE_INFINITY), -1);
+  assert.equal(S.readSteps(), 3);
+});
+
+// 2^31 - 1 is the largest small integer on 64-bit node 22; one more step used to
+// turn every later count into a heap allocation (ADR 0068 D4).
+test("the count stays exact past the small-integer range", () => {
+  S.resetSteps();
+  S.countSteps(2 ** 31 - 1);
+  S.countSteps(5);
+  S.countedIndexOf("abc", "c", 0);
+  assert.equal(S.readSteps(), 2 ** 31 + 7);
+  S.resetSteps();
+  assert.equal(S.readSteps(), 0);
+});
+
+test("indexOfSpan is the span countedIndexOf counts, and counts nothing", () => {
+  const cases = [["abcabc", "c", 0], ["abcabc", "c", 3], ["abc", "z", 1], ["abc", "a", -4], ["ab", "b", 9]];
+  for (const [text, needle, from] of cases) {
+    S.resetSteps();
+    const at = S.countedIndexOf(text, needle, from);
+    const counted = S.readSteps();
+    S.resetSteps();
+    assert.equal(S.indexOfSpan(text, needle, from, at), counted);
+    assert.equal(S.readSteps(), 0);
+  }
+});
+
 test("a regex hit adds the span through the match", () => {
   S.resetSteps();
   assert.equal(S.countedMatchIndex("aa bb", /b+/g, 0), 3);

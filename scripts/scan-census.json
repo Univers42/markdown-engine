@@ -54,9 +54,9 @@
       }
     },
     "markdown/parserInlineMatchers.ts": {
-      "reason": "28 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays); 13 BOUNDED sites scan a constant-bounded span (module init, VARIABLE_MAX_EXPR 256, fixed tags); 16 BOUNDED-COPY sites copy a span only on the success path, and the nested scan counts it again. Residuals: the bare-URL shape test (line ~59) runs only on the editor gate, not parse+render (UNSURE, uncounted); the email regex is quadratic on backtracking and counts its matched span only (ADR 0068 D12 b).",
+      "reason": "28 ROUTE sites are counted: 24 at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays), and the 4 raw indexOf in matchStackedEmphasis add their indexOfSpan to a local that one countSteps adds after the loop (ADR 0068 D4: a counted call per scan cost inline mixed 10K +3.6 %, batched +2.4 %); 13 BOUNDED sites scan a constant-bounded span (module init, VARIABLE_MAX_EXPR 256, fixed tags); 16 BOUNDED-COPY sites copy a span only on the success path, and the nested scan counts it again. Residuals: the bare-URL shape test (line ~59) runs only on the editor gate, not parse+render (UNSURE, uncounted); the email regex is quadratic on backtracking and counts its matched span only (ADR 0068 D12 b).",
       "counts": {
-        "indexOf": 0,
+        "indexOf": 4,
         "lastIndexOf": 0,
         "includes": 1,
         "search": 0,

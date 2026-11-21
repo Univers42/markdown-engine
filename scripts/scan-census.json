@@ -1,19 +1,10 @@
 {
-  "description": "ADR 0068 D2: raw scans and loops per file on the parse+render path. Regenerate counts with `node scripts/check-scan-census.cjs --write`; a changed count needs its reason updated in the same commit.",
+  "description": "ADR 0068 D2: raw scans and loops per file on the parse+render path. Regenerate counts with `node scripts/check-scan-census.cjs --write`; a changed count needs its reason updated in the same commit. A `*` in a scope entry's file name stands for every matching file of that directory, so a new file on the path fails until it is listed here.",
   "scope": [
     "markdown/inlineScanMemo.ts",
-    "markdown/parserInline.ts",
-    "markdown/parserInlineMatchers.ts",
-    "markdown/parserInlineUtils.ts",
+    "markdown/parserInline*",
     "markdown/taggedSpanClose.ts",
-    "markdown/htmlSubset/allowlist.ts",
-    "markdown/htmlSubset/entities.ts",
-    "markdown/htmlSubset/imageSrc.ts",
-    "markdown/htmlSubset/inline.ts",
-    "markdown/htmlSubset/nest.ts",
-    "markdown/htmlSubset/session.ts",
-    "markdown/htmlSubset/tokenizer.ts",
-    "markdown/htmlSubset/tree.ts",
+    "markdown/htmlSubset/*",
     "markdown/renderers/reactHtmlSubset.tsx"
   ],
   "files": {
@@ -69,6 +60,24 @@
         "slice": 28,
         "substring": 0,
         "loop": 12
+      }
+    },
+    "markdown/parserInlineTypes.ts": {
+      "reason": "Type declarations only: no scans or loops.",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 0,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 0,
+        "replace": 0,
+        "split": 0,
+        "slice": 0,
+        "substring": 0,
+        "loop": 0
       }
     },
     "markdown/parserInlineUtils.ts": {

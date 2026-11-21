@@ -12,7 +12,13 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { KINDS, countScans, compare } = require("../scripts/check-scan-census.cjs");
+const { spawnSync } = require("node:child_process");
+const fs = require("node:fs");
+const os = require("node:os");
+const path = require("node:path");
+const { KINDS, countScans, compare, scopeOf } = require("../scripts/check-scan-census.cjs");
+
+const ROOT = path.resolve(__dirname, "..");
 
 function zeroCounts() {
   const counts = {};
@@ -96,4 +102,46 @@ test("equal counts with a reason compare clean", () => {
   };
   const actual = { "a.ts": { ...zeroCounts(), slice: 1 } };
   assert.deepEqual(compare(expected, actual), []);
+});
+
+// Runs the real CLI on a temporary copy of the real markdown/ tree and census, plus
+// one extra file, so the scope the CLI builds is the one under test (D14 review X2).
+function runCensusOnCopy(extra) {
+  const copy = fs.mkdtempSync(path.join(os.tmpdir(), "scan-census-"));
+  try {
+    fs.cpSync(path.join(ROOT, "markdown"), path.join(copy, "markdown"), { recursive: true });
+    fs.mkdirSync(path.join(copy, "scripts"));
+    for (const name of ["check-scan-census.cjs", "scan-census.json"]) {
+      fs.copyFileSync(path.join(ROOT, "scripts", name), path.join(copy, "scripts", name));
+    }
+    if (extra !== undefined) {
+      fs.writeFileSync(path.join(copy, ...extra.file.split("/")), extra.text);
+    }
+    return spawnSync(process.execPath, [path.join(copy, "scripts", "check-scan-census.cjs")], {
+      encoding: "utf8",
+      env: { ...process.env, NODE_PATH: path.join(ROOT, "node_modules") },
+      timeout: 60_000,
+    });
+  } finally {
+    fs.rmSync(copy, { recursive: true, force: true });
+  }
+}
+
+test("the CLI passes on an unchanged copy of the tree", () => {
+  const run = runCensusOnCopy();
+  assert.equal(run.status, 0, run.stderr);
+  assert.match(run.stdout, /scan census: \d+ files match/);
+});
+
+for (const file of ["markdown/parserInlineX.ts", "markdown/htmlSubset/extra.ts"]) {
+  test(`a new ${file} with a raw indexOf fails the CLI`, () => {
+    const text = 'export function close(text: string, from: number): number {\n  return text.indexOf("]", from);\n}\n';
+    const run = runCensusOnCopy({ file, text });
+    assert.equal(run.status, 1, run.stdout);
+    assert.match(run.stderr, new RegExp(`${file}: not in the census`));
+  });
+}
+
+test("a scope pattern that matches no file is refused", () => {
+  assert.throws(() => scopeOf(ROOT, ["markdown/noSuchFile*"]), /matches no file/);
 });

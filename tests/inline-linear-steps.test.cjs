@@ -12,7 +12,8 @@
 // Caveat: only counted sites are counted, and a regex counts its matched span,
 // never its backtracking. The email shape read 4.00 at 9ff30b1 while its time
 // grew 16x, so its test guards the linear check that replaced the regex, not the
-// regex itself.
+// regex itself. The random units are a seeded sample of short repeated shapes,
+// not a proof over all inputs.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadMarkengine } = require("./support/loadMarkengine.cjs");
@@ -61,6 +62,27 @@ for (const [name, build] of Object.entries(SHAPES)) {
     test(`${label}: steps 128K / 32K within ${RATIO_LIMIT}x`, (t) => assertLinear(t, label, build, htmlSubset));
   }
 }
+
+// Short units over the characters that open or end the spans these matchers
+// look for, each repeated to 32K and 128K.
+const UNIT_ALPHABET = ["<", "[", "(", "@", ".", "*", "_", "a", " ", ">", "]", ")"];
+
+function randomUnit(random) {
+  let unit = "";
+  const length = 1 + Math.floor(random() * 6);
+  while (unit.length < length) unit += UNIT_ALPHABET[Math.floor(random() * UNIT_ALPHABET.length)];
+  return unit;
+}
+
+test(`seeded random units over <[(@.*_: steps 128K / 32K within ${RATIO_LIMIT}x`, (t) => {
+  const random = createRandom(0x321);
+  for (let round = 0; round < 24; round++) {
+    const unit = randomUnit(random);
+    for (const htmlSubset of MODES) {
+      assertLinear(t, `${JSON.stringify(unit)} (${htmlSubset ? "subset" : "plain"})`, (length) => repeatTo(length, unit), htmlSubset);
+    }
+  }
+});
 
 // The plain "<" autolink before osionos#321, restricted to content with no
 // whitespace or "<" (the close search now stops there, so such text is no link).

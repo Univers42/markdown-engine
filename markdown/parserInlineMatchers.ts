@@ -592,9 +592,12 @@ function matchStackedEmphasis(
   let matchEnd = -1;
   let depth = 0;
   const openersSeen: number[] = [];
-  // The next "\\" and "`" at or after `cursor`, rescanned only once `cursor` passes
-  // them (`cursor` never moves back). Rescanning at every candidate made a run of
-  // unclosed openers cubic: "*a "×10000 took 45831 ms, 754 ms cached (node 22).
+  // The next "\\" and "`" at or after `cursor`, looked up again only once `cursor`
+  // passes them (`cursor` never moves back). Rescanning at every candidate made a
+  // run of unclosed openers cubic: "*a "×10000 took 45831 ms, 754 ms cached (node 22).
+  // A cache per call still read to the end of a text with neither character once
+  // per opener: "<*" x n cost 268,435,456 of 268,541,952 steps at 32K chars
+  // (osionos#321). The scan memo shares the answer across openers.
   // -1: none left. -2: not looked for yet.
   let escapeAt = -2;
   let backtickAt = -2;
@@ -608,12 +611,10 @@ function matchStackedEmphasis(
     // Whichever interruption comes FIRST wins — a backslash inside a code
     // span is not an escape, and vice versa.
     if (escapeAt !== -1 && escapeAt < cursor) {
-      escapeAt = text.indexOf("\\", cursor);
-      scanned += indexOfSpan(text, "\\", cursor, escapeAt);
+      escapeAt = nextIndexOf(text, "\\", cursor);
     }
     if (backtickAt !== -1 && backtickAt < cursor) {
-      backtickAt = text.indexOf("`", cursor);
-      scanned += indexOfSpan(text, "`", cursor, backtickAt);
+      backtickAt = nextIndexOf(text, "`", cursor);
     }
     const escape = escapeAt;
     const backtick = backtickAt;

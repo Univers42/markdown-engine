@@ -45,9 +45,9 @@
       }
     },
     "markdown/parserInlineMatchers.ts": {
-      "reason": "26 ROUTE sites are counted: 22 at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays), and the 4 raw indexOf in matchStackedEmphasis add their indexOfSpan to a local that one countSteps adds after the loop (ADR 0068 D4: a counted call per scan cost inline mixed 10K +3.6 %, batched +2.4 %); 13 BOUNDED sites scan a constant-bounded span (module init, VARIABLE_MAX_EXPR 256, fixed tags); 16 BOUNDED-COPY sites copy a span only on the success path, and the nested scan counts it again. Residuals: the bare-URL shape test (line ~59) runs only on the editor gate, not parse+render (UNSURE, uncounted); none for the autolink, whose URL regex became startsWith (osionos#321) and whose email check is the one-pass isEmailAutolink (ADR 0068 R6, C6a). The link destination walk (a loop) moved to inlineScanMemo.ts findClosingParen, one walk per scan (osionos#321).",
+      "reason": "24 ROUTE sites are counted: 22 at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays), and the 2 raw marker indexOf in matchStackedEmphasis add their indexOfSpan to a local that one countSteps adds after the loop (ADR 0068 D4: a counted call per scan cost inline mixed 10K +3.6 %, batched +2.4 %; its escape and backtick lookups go through the scan memo, osionos#321); 13 BOUNDED sites scan a constant-bounded span (module init, VARIABLE_MAX_EXPR 256, fixed tags); 16 BOUNDED-COPY sites copy a span only on the success path, and the nested scan counts it again. Residuals: the bare-URL shape test (line ~59) runs only on the editor gate, not parse+render (UNSURE, uncounted); none for the autolink, whose URL regex became startsWith (osionos#321) and whose email check is the one-pass isEmailAutolink (ADR 0068 R6, C6a). The link destination walk (a loop) moved to inlineScanMemo.ts findClosingParen, one walk per scan (osionos#321).",
       "counts": {
-        "indexOf": 4,
+        "indexOf": 2,
         "lastIndexOf": 0,
         "includes": 1,
         "search": 0,

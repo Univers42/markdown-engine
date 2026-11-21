@@ -18,7 +18,13 @@ import type {
   InlineParser,
 } from "./parserInlineTypes";
 import { EMOJI_MAP } from "./parserEmoji";
-import { findClosingBracket, nextIndexOf, nextMatchIndex, unclosableOpeners } from "./inlineScanMemo";
+import {
+  findClosingBracket,
+  findClosingParen,
+  nextIndexOf,
+  nextMatchIndex,
+  unclosableOpeners,
+} from "./inlineScanMemo";
 import { findMatchingTaggedClose } from "./taggedSpanClose";
 import { hostnameFromUrl } from "./urlSugar";
 import { normalizeInlineLinkHref } from "../inlineLinks";
@@ -199,7 +205,7 @@ function matchStandardLink(
 ): InlineMatchResult | null {
   const labelClose = findClosingBracket(text, pos);
   if (labelClose === -1 || text[labelClose + 1] !== "(") return null;
-  const parenClose = findDestinationClose(text, labelClose + 2);
+  const parenClose = findClosingParen(text, labelClose + 1);
   if (parenClose === -1) return null;
   const label = text.slice(pos + 1, labelClose);
   const { target, title } = splitDestinationTitle(
@@ -719,26 +725,6 @@ function matchTaggedInlineChildren(
   };
 }
 
-function findDestinationClose(text: string, start: number): number {
-  let depth = 0;
-  for (let cursor = start; cursor < text.length; cursor++) {
-    const char = text[cursor];
-    if (char === "\\") {
-      cursor++;
-      continue;
-    }
-    if (char === "(") {
-      depth++;
-      continue;
-    }
-    if (char !== ")") continue;
-    if (depth === 0) { countSteps(cursor - start + 1); return cursor; }
-    depth--;
-  }
-  countSteps(text.length - start);
-  return -1;
-}
-
 function isEmailWhitespace(code: number): boolean {
   return (
     code === 32 ||
@@ -841,7 +827,7 @@ export function createInlineDispatch(
       if (text[pos] !== "!" || text[pos + 1] !== "[") return null;
       const altClose = findClosingBracket(text, pos + 1);
       if (altClose === -1 || text[altClose + 1] !== "(") return null;
-      const parenClose = findDestinationClose(text, altClose + 2);
+      const parenClose = findClosingParen(text, altClose + 1);
       if (parenClose === -1) return null;
       const alt = text.slice(pos + 2, altClose);
       const { target: src, title } = splitDestinationTitle(

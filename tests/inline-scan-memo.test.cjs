@@ -105,3 +105,29 @@ test("position answers are kept per scan and per key, and nothing is kept outsid
   M.positionAnswers("[u]x[/u]", "[u]").set(3, 4);
   assert.strictEqual(M.positionAnswers("[u]x[/u]", "[u]").size, 0, "outside a scan nothing is kept");
 });
+
+// The link destination's old definition (osionos#321): walked from just after the
+// "(", a backslash hides the next character, and the ")" at depth 0 closes it.
+function destinationCloseByWalk(text, start) {
+  let depth = 0;
+  for (let cursor = start; cursor < text.length; cursor++) {
+    const char = text[cursor];
+    if (char === "\\") cursor++;
+    else if (char === "(") depth++;
+    else if (char === ")" && depth-- === 0) return cursor;
+  }
+  return -1;
+}
+
+test("findClosingParen matches the destination walk from every link's \"(\", in a scan or not", () => {
+  const random = createRandom(0x9a7e45);
+  for (let round = 0; round < 400; round++) {
+    const text = randomText(random, ["](", "(", ")", "\\", "\\\\", "]", "x"], Math.floor(random() * 60));
+    const opens = [...text].flatMap((char, index) => (char === "(" && text[index - 1] === "]" ? [index] : []));
+    const expected = opens.map((open) => destinationCloseByWalk(text, open + 1));
+    assert.deepStrictEqual(opens.map((open) => M.findClosingParen(text, open)), expected, text);
+    withScan(text, () => {
+      assert.deepStrictEqual(opens.map((open) => M.findClosingParen(text, open)), expected, text);
+    });
+  }
+});

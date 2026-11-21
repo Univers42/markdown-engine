@@ -5,8 +5,9 @@
 // text, every opener rescanned to its end: "[x " x 68,266 (200 KB) took 15x the
 // 50 KB time, and a nested colour run was cubic. One frame per parseText call
 // remembers, for that text only, the next occurrence of each closer (a string
-// or a regex), the bracket pairs, the emphasis openers that cannot close and
-// the closes of tagged spans (taggedSpanClose.ts), so each is found once per scan. The frame replaced caches keyed by text content, which paid a
+// or a regex), the bracket and parenthesis pairs, the emphasis openers that
+// cannot close and the closes of tagged spans (taggedSpanClose.ts), so each is
+// found once per scan. The frame replaced caches keyed by text content, which paid a
 // full string compare on every lookup once the same text came back as a new
 // string (the editor's next parse): "*a " x 68,267 parsed in 10 ms as the same
 // string object and in 5,797 ms as an equal copy (node 22, 2026-11-18).
@@ -30,6 +31,7 @@ export interface InlineScanFrame {
   next: Map<string | RegExp, NextOccurrence> | null;
   unclosable: Map<string, Set<number>> | null;
   brackets: Map<number, number> | null;
+  parens: Map<number, number> | null;
   positions: Map<string, Map<number, number>> | null;
 }
 
@@ -38,7 +40,7 @@ let frame: InlineScanFrame | null = null;
 /** Starts remembering for `text`; pass the result to leaveScan when done. */
 export function enterScan(text: string): InlineScanFrame | null {
   const outer = frame;
-  frame = { text, next: null, unclosable: null, brackets: null, positions: null };
+  frame = { text, next: null, unclosable: null, brackets: null, parens: null, positions: null };
   return outer;
 }
 
@@ -103,6 +105,33 @@ function pairBrackets(text: string): Map<number, number> {
     const code = text.charCodeAt(index);
     if (code === 91) open.push(index);
     else if (code === 93 && open.length > 0) pairs.set(open.pop()!, index);
+  }
+  countSteps(text.length);
+  return pairs;
+}
+
+// A link destination ends at the ")" that brings its depth back to 0, a backslash
+// hiding the next character. Walked from each "](", an unclosed "[a](" x n read to
+// the end of the text every time: 2,147,418,112 of 2,147,811,324 steps at 128K
+// chars. The ")" that closes a "(" depends only on the text after it, so one walk
+// pairs every "(" of the scan. A link's "(" follows its "]", so it is never
+// escaped; an escaped "(" is skipped by the walk and reads -1.
+/** The ")" that closes the unescaped "(" at openPos, or -1. */
+export function findClosingParen(text: string, openPos: number): number {
+  const scan = frameFor(text);
+  if (!scan) return pairParens(text).get(openPos) ?? -1;
+  scan.parens ??= pairParens(text);
+  return scan.parens.get(openPos) ?? -1;
+}
+
+function pairParens(text: string): Map<number, number> {
+  const pairs = new Map<number, number>();
+  const open: number[] = [];
+  for (let index = 0; index < text.length; index++) {
+    const code = text.charCodeAt(index);
+    if (code === 92) index++;
+    else if (code === 40) open.push(index);
+    else if (code === 41 && open.length > 0) pairs.set(open.pop()!, index);
   }
   countSteps(text.length);
   return pairs;

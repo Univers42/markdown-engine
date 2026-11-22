@@ -9,7 +9,7 @@
   ],
   "files": {
     "markdown/inlineScanMemo.ts": {
-      "reason": "3 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays); a memo hit adds 0. The 2 loops, pairBrackets and pairParens, walk the text once per scan and count its length (osionos#321).",
+      "reason": "3 ROUTE sites are counted at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays); a memo hit adds 0. The 3 loops count every character they read: pairBrackets and pairParens walk the text once per scan; walkToClosingParen walks from one link open paren to its close, and the scan pairs the whole text once those walks pass its length, so a scan reads it at most three times (osionos#321).",
       "counts": {
         "indexOf": 0,
         "lastIndexOf": 0,
@@ -23,7 +23,7 @@
         "split": 0,
         "slice": 0,
         "substring": 0,
-        "loop": 2
+        "loop": 3
       }
     },
     "markdown/parserInline.ts": {

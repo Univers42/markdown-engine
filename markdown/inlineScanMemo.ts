@@ -32,6 +32,7 @@ export interface InlineScanFrame {
   unclosable: Map<string, Set<number>> | null;
   brackets: Map<number, number> | null;
   parens: Map<number, number> | null;
+  parenSteps: number;
   positions: Map<string, Map<number, number>> | null;
 }
 
@@ -40,7 +41,7 @@ let frame: InlineScanFrame | null = null;
 /** Starts remembering for `text`; pass the result to leaveScan when done. */
 export function enterScan(text: string): InlineScanFrame | null {
   const outer = frame;
-  frame = { text, next: null, unclosable: null, brackets: null, parens: null, positions: null };
+  frame = { text, next: null, unclosable: null, brackets: null, parens: null, parenSteps: 0, positions: null };
   return outer;
 }
 
@@ -114,14 +115,33 @@ function pairBrackets(text: string): Map<number, number> {
 // hiding the next character. Walked from each "](", an unclosed "[a](" x n read to
 // the end of the text every time: 2,147,418,112 of 2,147,811,324 steps at 128K
 // chars. The ")" that closes a "(" depends only on the text after it, so one walk
-// pairs every "(" of the scan. A link's "(" follows its "]", so it is never
-// escaped; an escaped "(" is skipped by the walk and reads -1.
+// can pair every "(" of the scan. Pairing up front cost "parse inline mixed 10K"
+// +5.11 % (ruling IM5, r321/im5-abc-run1.txt): its links close a few characters
+// on. So each "(" walks to its close until the scan's walks pass the text's
+// length, and only then is the whole text paired: at most three reads of it.
+// A link's "(" follows its "]", so it is never escaped; an escaped "(" reads -1.
 /** The ")" that closes the unescaped "(" at openPos, or -1. */
 export function findClosingParen(text: string, openPos: number): number {
   const scan = frameFor(text);
-  if (!scan) return pairParens(text).get(openPos) ?? -1;
-  scan.parens ??= pairParens(text);
-  return scan.parens.get(openPos) ?? -1;
+  if (scan?.parens) return scan.parens.get(openPos) ?? -1;
+  const close = walkToClosingParen(text, openPos + 1);
+  if (scan) {
+    scan.parenSteps += close === -1 ? text.length - openPos : close - openPos;
+    if (scan.parenSteps > text.length) scan.parens = pairParens(text);
+  }
+  return close;
+}
+
+function walkToClosingParen(text: string, start: number): number {
+  let depth = 0;
+  for (let index = start; index < text.length; index++) {
+    const code = text.charCodeAt(index);
+    if (code === 92) index++;
+    else if (code === 40) depth++;
+    else if (code === 41 && depth-- === 0) { countSteps(index - start + 1); return index; }
+  }
+  countSteps(text.length - start);
+  return -1;
 }
 
 function pairParens(text: string): Map<number, number> {

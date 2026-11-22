@@ -58,17 +58,32 @@ export function countedMatchIndex(text: string, pattern: RegExp, from: number): 
   return match.index;
 }
 
-// The throw lives in its own function so countSteps stays two compares and an add.
-// The +14.4 % -> +3.1 % once credited to this move was measured at 300 ms per case,
-// below the 2^31 crossing above; the crossing was the cost (ADR 0068 D4).
+// The throw lives in its own function so refuseSteps stays out of the hot path.
 function refuseSteps(n: number): never {
   throw new RangeError(`countSteps needs a non-negative integer, got ${n}`);
 }
 
-/** Adds a native scan loop's explicitly reported step count. */
-export function countSteps(n: number): void {
+/** Checking wrapper that tests and the bench harness can install to catch mis-counted sites. */
+export function checkingCountSteps(n: number): void {
   if (!(n >= 0) || n % 1 !== 0) refuseSteps(n);
   counter[0] += n;
+}
+
+function bareAdd(n: number): void {
+  counter[0] += n;
+}
+
+/** Adds a native scan loop's explicitly reported step count (bare add in production). */
+export let countSteps: (n: number) => void = bareAdd;
+
+/** Installs the checking wrapper on countSteps for tests and bench. */
+export function installCheckingCountSteps(): void {
+  countSteps = checkingCountSteps;
+}
+
+/** Restores the production bare-add countSteps. */
+export function restoreProductionCountSteps(): void {
+  countSteps = bareAdd;
 }
 
 /** Returns the steps counted since the last reset. */

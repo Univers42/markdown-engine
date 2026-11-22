@@ -17,6 +17,10 @@
 // the counter land in ONE bundle, so readSteps() sees every counted scan of
 // one render. Not in package.json "exports", never to be added (D5): it
 // re-exports the counter that no package entry may expose.
+import { installCheckingCountSteps } from "../markdown/scanSteps";
+
+installCheckingCountSteps();
+
 export { parse } from "../index";
 export { renderReact } from "../react";
 export { readSteps, resetSteps } from "../markdown/scanSteps";

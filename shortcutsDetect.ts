@@ -66,6 +66,7 @@ function isOrdered(s: string): { num: number; rest: string } | null {
   while (i < s.length && s[i] >= '0' && s[i] <= '9') i++;
   if (i === 0 || i >= s.length) return null;
   if (s[i] !== '.' && s[i] !== ')') return null;
+  if (s[i + 1] !== ' ') return null;
   const num = Number.parseInt(s.substring(0, i), 10);
   const rest = stripPrefix(s, i + 1);
   return { num, rest };

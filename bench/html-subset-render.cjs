@@ -8,7 +8,7 @@
 const { createHash } = require("node:crypto");
 const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
-const { loadMarkengineInRealm } = require("../tests/support/loadMarkengine.cjs");
+const { loadMarkengineInRealm, bundleToDisk } = require("../tests/support/loadMarkengine.cjs");
 
 const E = loadMarkengineInRealm("bench/scanEntry.ts");
 
@@ -26,7 +26,7 @@ const CACHE_DIR = join(__dirname, "..", "node_modules", ".cache", "loadMarkengin
 // tests/support/loadMarkengine.cjs writes it). The digest lets the test hold
 // every worker to one bundle (D6): a stale or split bundle shows as two digests.
 function bundleEvidence() {
-  const file = join(CACHE_DIR, `bench_scanEntry_ts.${process.pid}.cjs`);
+  const file = bundleToDisk("bench/scanEntry.ts");
   return { file, sha256: createHash("sha256").update(readFileSync(file)).digest("hex") };
 }
 

@@ -739,6 +739,45 @@ function findDestinationClose(text: string, start: number): number {
   return -1;
 }
 
+function isEmailWhitespace(code: number): boolean {
+  return (
+    code === 32 ||
+    (code >= 9 && code <= 13) ||
+    code === 0xa0 ||
+    code === 0x1680 ||
+    (code >= 0x2000 && code <= 0x200a) ||
+    code === 0x2028 ||
+    code === 0x2029 ||
+    code === 0x202f ||
+    code === 0x205f ||
+    code === 0x3000 ||
+    code === 0xfeff
+  );
+}
+
+/**
+ * Linear single-pass validation for email autolinks (<user@domain.tld>).
+ * Strictly linear (no backtracking) equivalent of /^[^\s@]+@[^\s@]+\.[^\s@]+$/.
+ */
+export function isEmailAutolink(s: string): boolean {
+  if (!s || s.length < 5) return false;
+  let at = -1;
+  let hasValidDot = false;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s.charCodeAt(i);
+    if (isEmailWhitespace(ch)) return false;
+    if (ch === 64) {
+      if (at !== -1) return false;
+      at = i;
+    } else if (ch === 46) {
+      if (at !== -1 && i >= at + 2 && i <= s.length - 2) {
+        hasValidDot = true;
+      }
+    }
+  }
+  return at >= 1 && hasValidDot;
+}
+
 export function createInlineDispatch(
   parseInline: InlineParser,
 ): Record<string, InlineMatcher[]> {
@@ -928,7 +967,7 @@ export function createInlineDispatch(
           },
         };
       }
-      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inner)) {
+      if (isEmailAutolink(inner)) {
         return {
           start: pos,
           end: close + 1,

@@ -95,14 +95,28 @@ test("a non-global regex is refused", () => {
   assert.equal(S.readSteps(), 0);
 });
 
-test("countSteps adds its argument and refuses a bad one", () => {
+test("countSteps is a bare add in production and refuses invalid steps under checking wrapper", () => {
   S.resetSteps();
   S.countSteps(7);
   S.countSteps(0);
   assert.equal(S.readSteps(), 7);
-  assert.throws(() => S.countSteps(-1), RangeError);
-  assert.throws(() => S.countSteps(1.5), RangeError);
-  assert.equal(S.readSteps(), 7);
+  // Production countSteps is a bare add and does not throw on negative or fractional counts
+  S.countSteps(-1);
+  assert.equal(S.readSteps(), 6);
+  S.resetSteps();
+
+  // The checking wrapper catches mis-counted sites in tests and bench
+  S.installCheckingCountSteps();
+  try {
+    S.countSteps(7);
+    S.countSteps(0);
+    assert.equal(S.readSteps(), 7);
+    assert.throws(() => S.countSteps(-1), RangeError);
+    assert.throws(() => S.countSteps(1.5), RangeError);
+    assert.equal(S.readSteps(), 7);
+  } finally {
+    S.restoreProductionCountSteps();
+  }
 });
 
 test("counts accumulate until reset", () => {

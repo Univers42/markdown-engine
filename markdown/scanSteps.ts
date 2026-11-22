@@ -73,17 +73,21 @@ function bareAdd(n: number): void {
   counter[0] += n;
 }
 
+let activeCountSteps: (n: number) => void = bareAdd;
+
 /** Adds a native scan loop's explicitly reported step count (bare add in production). */
-export let countSteps: (n: number) => void = bareAdd;
+export const countSteps = (n: number): void => {
+  activeCountSteps(n);
+};
 
 /** Installs the checking wrapper on countSteps for tests and bench. */
 export function installCheckingCountSteps(): void {
-  countSteps = checkingCountSteps;
+  activeCountSteps = checkingCountSteps;
 }
 
 /** Restores the production bare-add countSteps. */
 export function restoreProductionCountSteps(): void {
-  countSteps = bareAdd;
+  activeCountSteps = bareAdd;
 }
 
 /** Returns the steps counted since the last reset. */

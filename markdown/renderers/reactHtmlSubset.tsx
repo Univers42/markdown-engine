@@ -90,7 +90,7 @@ export function renderHtmlElement<C>(
   key: Key,
   renderChild: (child: C, key: number) => React.ReactNode,
 ): React.ReactNode {
-  const children = VOID_TAGS.has(node.tag) ? [] : node.children.map(renderChild);
+  const children = VOID_TAGS.has(node.tag) ? [] : node.children.map((child, index) => renderChild(child, index));
   if (!SUBSET_TAGS.has(node.tag)) return React.createElement(React.Fragment, { key }, ...children);
   const attrs = validateAttributes(node.tag, node.attrs);
   if (node.tag === "img") return renderSubsetImage(attrs, settings.htmlSubset, key);

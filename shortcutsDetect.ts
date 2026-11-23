@@ -12,6 +12,7 @@
 
 // Markdown shortcuts — block detection and shortcut map
 import type { MarkEngineBlock as Block, MarkEngineBlockType as BlockType } from './blockContract';
+import { matchCompactToggle, matchQuotedHeadingToggle } from './markdown/blockLineMatchers';
 
 export interface BlockDetection {
   type: BlockType;
@@ -117,29 +118,14 @@ function detectHeading(line: string): BlockDetection | null {
 }
 
 function detectToggleHeading(line: string): BlockDetection | null {
-  const compactMatch = /^(#{1,6})>\s*(.*)$/.exec(line);
-  if (compactMatch) {
-    const content = compactMatch[2] ?? '';
-    return {
-      type: 'toggle',
-      content,
-      remainingContent: content,
-      headingLevel: compactMatch[1].length as Block['headingLevel'],
-    };
-  }
-
-  const notionMatch = /^>\s+(#{1,6})\s+(.*)$/.exec(line);
-  if (notionMatch) {
-    const content = notionMatch[2] ?? '';
-    return {
-      type: 'toggle',
-      content,
-      remainingContent: content,
-      headingLevel: notionMatch[1].length as Block['headingLevel'],
-    };
-  }
-
-  return null;
+  const toggle = matchCompactToggle(line) ?? matchQuotedHeadingToggle(line);
+  if (!toggle) return null;
+  return {
+    type: 'toggle',
+    content: toggle.text,
+    remainingContent: toggle.text,
+    headingLevel: toggle.level as Block['headingLevel'],
+  };
 }
 
 function detectToDo(line: string): BlockDetection | null {

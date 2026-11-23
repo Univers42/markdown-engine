@@ -1,0 +1,35 @@
+{
+  "detectBlockType": [
+    ["#> x",{"type":"toggle","content":"x","remainingContent":"x","headingLevel":1}],
+    ["###>x",{"type":"toggle","content":"x","remainingContent":"x","headingLevel":3}],
+    ["#>  a\rb",null],
+    ["#>",{"type":"toggle","content":"","remainingContent":"","headingLevel":1}],
+    ["####### x",null],
+    ["> # Title",{"type":"toggle","content":"Title","remainingContent":"Title","headingLevel":1}],
+    [">  ### T  ",{"type":"toggle","content":"T  ","remainingContent":"T  ","headingLevel":3}],
+    ["> #\ta\rb",{"type":"toggle","content":"#\ta\rb","remainingContent":"#\ta\rb"}],
+    ["> ####### x",{"type":"toggle","content":"####### x","remainingContent":"####### x"}],
+    ["> # x",{"type":"toggle","content":"x","remainingContent":"x","headingLevel":1}],
+    ["> #  ",{"type":"toggle","content":"","remainingContent":"","headingLevel":1}],
+    ["> #x",{"type":"toggle","content":"#x","remainingContent":"#x"}],
+    [">  #  ",{"type":"toggle","content":"","remainingContent":"","headingLevel":1}],
+    ["> #                                        a\rb",{"type":"toggle","content":"#                                        a\rb","remainingContent":"#                                        a\rb"}],
+    ["#>                                        a\rb",null]
+  ],
+  "renderSource": [
+    ["# Title","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\"><span class=\"md-src-marker md-src-symbol-hidden\" aria-hidden=\"true\">#</span> Title</span></span></code></pre>"],
+    ["   ## T","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\">   <span class=\"md-src-marker md-src-symbol-hidden\" aria-hidden=\"true\">##</span> T</span></span></code></pre>"],
+    ["    # four","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\">    # four</span></span></code></pre>"],
+    ["# x","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\"><span class=\"md-src-marker md-src-symbol-hidden\" aria-hidden=\"true\">#</span> x</span></span></code></pre>"],
+    ["# a b","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\"># a b</span></span></code></pre>"],
+    ["####### x","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\">####### x</span></span></code></pre>"],
+    ["#","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\">#</span></span></code></pre>"],
+    ["# ","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\"><span class=\"md-src-marker md-src-symbol-hidden\" aria-hidden=\"true\">#</span> </span></span></code></pre>"],
+    ["\t# x","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\">\t<span class=\"md-src-marker md-src-symbol-hidden\" aria-hidden=\"true\">#</span> x</span></span></code></pre>"],
+    ["# a ","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\"># a </span></span></code></pre>"],
+    ["#x","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\">#x</span></span></code></pre>"],
+    ["  \t# y","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\">  \t<span class=\"md-src-marker md-src-symbol-hidden\" aria-hidden=\"true\">#</span> y</span></span></code></pre>"],
+    ["#                                        a b","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\">#                                        a b</span></span></code></pre>"],
+    ["#                                        a\rb","<pre class=\"md-source-view\" data-mode=\"reading\"><code><span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\"><span class=\"md-src-marker md-src-symbol-hidden\" aria-hidden=\"true\">#</span>                                        a</span></span>\n<span class=\"md-src-line\" data-block-state=\"reading\"><span class=\"md-src-code-line\">b</span></span></code></pre>"]
+  ]
+}

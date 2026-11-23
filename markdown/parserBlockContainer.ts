@@ -10,7 +10,7 @@
 // 3-backtick caveat, ADR FF-7 (e)). A fence that never closes protects nothing, so the
 // container still ends at its `:::` and the code runs to that end, as before.
 import type { BlockNode } from "./ast";
-import { CONTAINER_OPEN_RE } from "./blockKind";
+import { matchContainerOpen } from "./blockKind";
 import { parseContainerAttributes } from "./containerAttributes";
 import { closesFence, fenceRunAt, type FenceRun } from "./fence";
 import { advance, type ParseContext } from "./parserBlockContext";
@@ -47,7 +47,7 @@ function closesContainer(scan: ContainerScan, trimmed: string, ctx: ParseContext
     if (closesFence(trimmed, scan.fence)) scan.fence = null;
     return false;
   }
-  if (CONTAINER_OPEN_RE.test(trimmed)) scan.depth += 1;
+  if (matchContainerOpen(trimmed)) scan.depth += 1;
   else if (CONTAINER_CLOSE_RE.test(trimmed)) scan.depth -= 1;
   else {
     const run = fenceRunAt(trimmed);
@@ -69,9 +69,9 @@ function containerBody(ctx: ParseContext): string[] {
 }
 
 export function parseContainer(ctx: ParseContext, parseFn: ParseBlocksFn): BlockNode {
-  const open = CONTAINER_OPEN_RE.exec(advance(ctx).trimStart());
-  const kind = open?.[1].toLowerCase() ?? "div";
-  const params = open?.[2].trim() || undefined;
+  const open = matchContainerOpen(advance(ctx).trimStart());
+  const kind = open?.kind.toLowerCase() ?? "div";
+  const params = open?.params.trim() || undefined;
   const attributes = parseContainerAttributes(params);
   const innerCtx: ParseContext = { lines: containerBody(ctx), pos: 0 };
   const children = parseFn(innerCtx, 0);

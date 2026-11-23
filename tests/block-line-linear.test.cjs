@@ -3,9 +3,11 @@
 // M240-1 (osionos#240): an ATX heading line and a table delimiter row are matched
 // in time linear in the line. The old regexes backtracked quadratically on one long
 // line: 13.2 s for a 128 KiB heading line, 8.0 s for a 128 KiB delimiter-like line.
+// The toggle and container openers had the same `\s*(.*)$` tail: ~1.2 s at 64 KiB.
 //
 // fixtures/block-line-pins.json holds each input with the exact parse() output the
-// regex parser gave at 683be5c, so a linear matcher that changes any output fails.
+// regex parser gave (headings and tables at 683be5c, toggles and containers at
+// 7c07e5f), so a linear matcher that changes any output fails.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { loadMarkengine } = require("./support/loadMarkengine.cjs");
@@ -17,9 +19,11 @@ const { assertLinearGrowth } = require("./support/linearity.cjs");
 const { parse } = loadMarkengine("index.ts");
 const matchers = loadMarkengine("markdown/blockLineMatchers.ts");
 
+// Compared as JSON: a container without params carries `params: undefined`, which
+// the fixture cannot hold.
 test("block line pins: parse() output is unchanged from the regex parser", () => {
   for (const [markdown, expected] of pins) {
-    assert.deepEqual(parse(markdown), expected, JSON.stringify(markdown));
+    assert.deepEqual(JSON.parse(JSON.stringify(parse(markdown))), expected, JSON.stringify(markdown));
   }
 });
 
@@ -97,6 +101,9 @@ const LONG_LINES = {
   heading_ws: (size) => `# a${" ".repeat(size)}x`,
   heading_ws_cr: (size) => `# a${" ".repeat(size)}\rx`,
   table_sep_ws: (size) => `a|b\n---${" ".repeat(size)}x`,
+  toggle_compact_ws_cr: (size) => `#>${" ".repeat(size)}a\rb`,
+  toggle_bracket_ws_cr: (size) => `> [>]${" ".repeat(size)}a\rb`,
+  container_open_ws_cr: (size) => `:::note${" ".repeat(size)}a\rb\n:::`,
 };
 
 for (const [shape, inputOfSize] of Object.entries(LONG_LINES)) {

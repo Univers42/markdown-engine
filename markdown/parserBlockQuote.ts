@@ -12,6 +12,7 @@
 
 // Markdown parser — blockquote & callout block parsers
 import type { BlockNode } from "./ast";
+import { matchBracketToggle, matchCompactToggle } from "./blockLineMatchers";
 import type { ParseContext } from "./parserBlockHelpers";
 import { advance } from "./parserBlockHelpers";
 import { parseInline } from "./parserInline";
@@ -36,10 +37,9 @@ export function parseToggle(
   const header = advance(ctx).trimStart();
   // Two openers: the explicit "> [>]" / "> [toggle]" form, and the compact
   // "#..######>" form (the editor's toggle-heading) which also carries a level.
-  const compact = /^(#{1,6})>\s*(.*)$/.exec(header);
-  const bracket = /^>\s*(?:\[\s*>\s*\]|\[toggle\])\s*(.*)$/i.exec(header);
-  const level = compact ? (compact[1].length as 1 | 2 | 3 | 4 | 5 | 6) : undefined;
-  const summaryText = compact?.[2] ?? bracket?.[1] ?? "";
+  const compact = matchCompactToggle(header);
+  const level = compact ? (compact.level as 1 | 2 | 3 | 4 | 5 | 6) : undefined;
+  const summaryText = compact?.text ?? matchBracketToggle(header) ?? "";
 
   const bodyLines: string[] = [];
   while (ctx.pos < ctx.lines.length) {

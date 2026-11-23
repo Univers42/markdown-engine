@@ -27,6 +27,6 @@ test("kindClassName adds the kind class only for a word", () => {
 });
 
 test("the container opener captures the same word and leaves the rest as params", () => {
-  assert.deepStrictEqual(K.CONTAINER_OPEN_RE.exec(':::note"><img').slice(1), ["note", '"><img']);
-  assert.strictEqual(K.CONTAINER_OPEN_RE.test(":::1a"), false);
+  assert.deepStrictEqual(K.matchContainerOpen(':::note"><img'), { kind: "note", params: '"><img' });
+  assert.strictEqual(K.matchContainerOpen(":::1a"), null);
 });

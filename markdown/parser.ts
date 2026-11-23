@@ -17,7 +17,7 @@ import { parseInline, slugify } from "./parserInline";
 import { setInlineRefDefinitions } from "./parserInlineMatchers";
 import { collectRefDefinitions } from "./refDefinitions";
 import type { ParseContext } from "./parserBlockHelpers";
-import { CONTAINER_OPEN_RE } from "./blockKind";
+import { matchContainerOpen } from "./blockKind";
 import { matchAtxHeading, splitHeadingCustomId } from "./blockLineMatchers";
 import { parseContainer } from "./parserBlockContainer";
 import {
@@ -237,7 +237,7 @@ function parseNextBlock(ctx: ParseContext, indent: number): BlockNode | null {
     skipHtmlCommentBlock(ctx);
     return null;
   }
-  if (trimmed.startsWith(":::") && CONTAINER_OPEN_RE.test(trimmed)) {
+  if (trimmed.startsWith(":::") && matchContainerOpen(trimmed)) {
     return parseContainer(ctx, parseBlocks);
   }
   if (isThematicBreak(trimmed)) {

@@ -10,6 +10,7 @@
 /*                                                                            */
 /* ************************************************************************** */
 
+import { matchHeadingMarker } from "../markdown/blockLineMatchers";
 import { escapeHtml } from "./utils";
 import {
   resolveIndexedMarkdownMode,
@@ -196,13 +197,13 @@ function renderInline(
 }
 
 function renderLine(line: string, decorator: MarkdownSymbolDecorator): string {
-  const headingMatch = /^(\s{0,3})(#{1,6})(\s+)(.*)$/.exec(line);
-  if (headingMatch) {
+  const heading = matchHeadingMarker(line);
+  if (heading) {
     return [
-      esc(headingMatch[1]),
-      decorator.marker(headingMatch[2]),
-      esc(headingMatch[3]),
-      renderInline(headingMatch[4], decorator),
+      esc(heading.indent),
+      decorator.marker(heading.marker),
+      esc(heading.space),
+      renderInline(heading.text, decorator),
     ].join("");
   }
 

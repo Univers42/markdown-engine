@@ -18,6 +18,7 @@ import { parseInline } from './parserInline';
 import type { ParseContext } from './parserBlockContext';
 import { advance } from './parserBlockContext';
 import { closesFence } from './fence';
+import { isTableDelimiterRow } from './blockLineMatchers';
 import { isHtmlSubsetActive } from './htmlSubset/session';
 
 export function isThematicBreak(line: string): boolean {
@@ -144,9 +145,7 @@ export function isTableStart(ctx: ParseContext): boolean {
   const line1 = ctx.lines[ctx.pos].trim();
   const line2 = ctx.lines[ctx.pos + 1].trim();
   if (!line1.includes('|')) return false;
-  // GFM delimiter row: each cell is `:?-+:?` (optional alignment colons around
-  // one or more dashes), cells separated by pipes, outer pipes optional.
-  return /^\s*\|?\s*:?-+:?\s*(\|\s*:?-+:?\s*)*\|?\s*$/.test(line2);
+  return isTableDelimiterRow(line2);
 }
 
 function parseTableRow(line: string): string[] {

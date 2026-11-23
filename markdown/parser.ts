@@ -18,6 +18,7 @@ import { setInlineRefDefinitions } from "./parserInlineMatchers";
 import { collectRefDefinitions } from "./refDefinitions";
 import type { ParseContext } from "./parserBlockHelpers";
 import { CONTAINER_OPEN_RE } from "./blockKind";
+import { matchAtxHeading, splitHeadingCustomId } from "./blockLineMatchers";
 import { parseContainer } from "./parserBlockContainer";
 import {
   peek,
@@ -104,20 +105,12 @@ function parseFrontMatter(
   return null;
 }
 
-const HEADING_CUSTOM_ID_RE = /\s*\{#([A-Za-z0-9_-]+)\}\s*$/;
-
-function splitHeadingCustomId(text: string): { text: string; id?: string } {
-  const match = HEADING_CUSTOM_ID_RE.exec(text);
-  if (!match) return { text };
-  return { text: text.slice(0, match.index).trimEnd(), id: match[1] };
-}
-
 function tryParseHeading(ctx: ParseContext, trimmed: string): BlockNode | null {
-  const hm = /^(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/.exec(trimmed);
+  const hm = matchAtxHeading(trimmed);
   if (!hm) return null;
   advance(ctx);
-  const level = hm[1].length as 1 | 2 | 3 | 4 | 5 | 6;
-  const { text, id } = splitHeadingCustomId(hm[2]);
+  const level = hm.level as 1 | 2 | 3 | 4 | 5 | 6;
+  const { text, id } = splitHeadingCustomId(hm.text);
   return {
     type: "heading",
     level,

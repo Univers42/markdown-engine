@@ -10,7 +10,12 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-import { matchHeadingMarker } from "../markdown/blockLineMatchers";
+import {
+  matchFenceMarker,
+  matchHeadingMarker,
+  matchListMarker,
+  matchQuoteMarker,
+} from "../markdown/blockLineMatchers";
 import { escapeHtml } from "./utils";
 import {
   resolveIndexedMarkdownMode,
@@ -207,33 +212,31 @@ function renderLine(line: string, decorator: MarkdownSymbolDecorator): string {
     ].join("");
   }
 
-  const fenceMatch = /^(\s*)(```+|~~~+)(.*)$/.exec(line);
-  if (fenceMatch) {
+  const fence = matchFenceMarker(line);
+  if (fence) {
     return [
-      esc(fenceMatch[1]),
-      decorator.marker(fenceMatch[2]),
-      `<span class="md-src-lang">${esc(fenceMatch[3])}</span>`,
+      esc(fence.indent),
+      decorator.marker(fence.marker),
+      `<span class="md-src-lang">${esc(fence.text)}</span>`,
     ].join("");
   }
 
-  const quoteMatch = /^(\s*)(>+\s?)(.*)$/.exec(line);
-  if (quoteMatch) {
+  const quote = matchQuoteMarker(line);
+  if (quote) {
     return [
-      esc(quoteMatch[1]),
-      decorator.marker(quoteMatch[2]),
-      renderInline(quoteMatch[3], decorator),
+      esc(quote.indent),
+      decorator.marker(quote.marker),
+      renderInline(quote.text, decorator),
     ].join("");
   }
 
-  const listMatch = /^(\s*)([-*+]\s+|\d+[.)]\s+)(\[[ xX]\]\s+)?(.*)$/.exec(
-    line,
-  );
-  if (listMatch) {
+  const list = matchListMarker(line);
+  if (list) {
     return [
-      esc(listMatch[1]),
-      decorator.marker(listMatch[2]),
-      listMatch[3] ? decorator.task(listMatch[3]) : "",
-      renderInline(listMatch[4], decorator),
+      esc(list.indent),
+      decorator.marker(list.marker),
+      list.task ? decorator.task(list.task) : "",
+      renderInline(list.text, decorator),
     ].join("");
   }
 

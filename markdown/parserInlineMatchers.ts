@@ -26,6 +26,7 @@ import {
   nextMatchIndex,
   unclosableOpeners,
 } from "./inlineScanMemo";
+import { splitQuotedTitle } from "./blockLineMatchers";
 import { findMatchingTaggedClose } from "./taggedSpanClose";
 import { hostnameFromUrl } from "./urlSugar";
 import { normalizeInlineLinkHref } from "../inlineLinks";
@@ -190,13 +191,11 @@ function matchPageLink(text: string, pos: number): InlineMatchResult | null {
   };
 }
 
-/** `url "title"` split — the regex only runs when a trailing quote exists. */
+/** `url "title"` split — the scan only runs when a trailing quote exists. */
 function splitDestinationTitle(inside: string): { target: string; title?: string } {
   if (inside.charCodeAt(inside.length - 1) !== 34) return { target: inside };
   countSteps(inside.length);
-  const match = /^(.*?)\s+"([^"]*)"$/.exec(inside);
-  if (!match) return { target: inside };
-  return { target: match[1], title: match[2] };
+  return splitQuotedTitle(inside) ?? { target: inside };
 }
 
 function matchStandardLink(

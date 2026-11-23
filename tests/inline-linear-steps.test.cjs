@@ -35,7 +35,21 @@ const SHAPES = {
   'unclosed links "[a](" x n': (length) => repeatTo(length, "[a]("),
   'emphasis openers "*a " x n': (length) => repeatTo(length, "*a "),
   'unclosed "[" x n': (length) => repeatTo(length, "["),
+  // osionos#240: the code-span matcher measured the run from each of its positions.
+  'backtick run, "a" + "`" x n': (length) => "a" + repeatTo(length - 1, "`"),
+  'backtick run closing a shorter one, "`" x 2n/3 + "a" + "`" x n/3': (length) =>
+    repeatTo(Math.ceil((length * 2) / 3), "`") + "a" + repeatTo(length - Math.ceil((length * 2) / 3) - 1, "`"),
+  'shrinking backtick runs, "`" x k + "a" for k = m..1': (length) => shrinkingRuns(length),
 };
+
+// Runs of m, m-1, ..., 1 backticks: each opener's closer search reads every
+// shorter run after it.
+function shrinkingRuns(length) {
+  let text = "";
+  let run = Math.floor(Math.sqrt(2 * length));
+  while (run > 0) text += "`".repeat(run--) + "a";
+  return text;
+}
 
 function parseOnce(text, htmlSubset) {
   return htmlSubset ? E.runInHtmlSubsetSession(text.length, () => E.parseInline(text)) : E.parseInline(text);

@@ -4,6 +4,7 @@
     "markdown/inlineScanMemo.ts",
     "markdown/parserInline*",
     "markdown/taggedSpanClose.ts",
+    "markdown/codeSpanClose.ts",
     "markdown/htmlSubset/*",
     "markdown/renderers/reactHtmlSubset.tsx"
   ],
@@ -45,7 +46,7 @@
       }
     },
     "markdown/parserInlineMatchers.ts": {
-      "reason": "24 ROUTE sites are counted: 22 at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays), and the 2 raw marker indexOf in matchStackedEmphasis add their indexOfSpan to a local that one countSteps adds after the loop (ADR 0068 D4: a counted call per scan cost inline mixed 10K +3.6 %, batched +2.4 %; its escape and backtick lookups go through the scan memo, osionos#321); 13 BOUNDED sites scan a constant-bounded span (module init, VARIABLE_MAX_EXPR 256, fixed tags); 16 BOUNDED-COPY sites copy a span only on the success path, and the nested scan counts it again. Residuals: the bare-URL shape test (line ~59) runs only on the editor gate, not parse+render (UNSURE, uncounted); none for the autolink, whose URL regex became startsWith (osionos#321) and whose email check is the one-pass isEmailAutolink (ADR 0068 R6, C6a). The link destination walk (a loop) moved to inlineScanMemo.ts findClosingParen, one walk per scan (osionos#321). The title split's countSteps stays beside its scan, now blockLineMatchers.ts splitQuotedTitle instead of a backtracking exec (osionos#240).",
+      "reason": "24 ROUTE sites are counted: 22 at the native call (countedIndexOf / countedMatchIndex, or countSteps beside a native call that stays), and the 2 raw marker indexOf in matchStackedEmphasis add their indexOfSpan to a local that one countSteps adds after the loop (ADR 0068 D4: a counted call per scan cost inline mixed 10K +3.6 %, batched +2.4 %; its escape and backtick lookups go through the scan memo, osionos#321); 13 BOUNDED sites scan a constant-bounded span (module init, VARIABLE_MAX_EXPR 256, fixed tags); 16 BOUNDED-COPY sites copy a span only on the success path, and the nested scan counts it again. Residuals: the bare-URL shape test (line ~59) runs only on the editor gate, not parse+render (UNSURE, uncounted); none for the autolink, whose URL regex became startsWith (osionos#321) and whose email check is the one-pass isEmailAutolink (ADR 0068 R6, C6a). The link destination walk (a loop) moved to inlineScanMemo.ts findClosingParen, one walk per scan (osionos#321). The title split's countSteps stays beside its scan, now blockLineMatchers.ts splitQuotedTitle instead of a backtracking exec (osionos#240). The code-span matcher's run loop moved to codeSpanClose.ts, which reads a scan's backtick runs once (osionos#240).",
       "counts": {
         "indexOf": 2,
         "lastIndexOf": 0,
@@ -59,7 +60,7 @@
         "split": 0,
         "slice": 28,
         "substring": 0,
-        "loop": 12
+        "loop": 11
       }
     },
     "markdown/parserInlineTypes.ts": {
@@ -114,6 +115,24 @@
         "slice": 0,
         "substring": 0,
         "loop": 4
+      }
+    },
+    "markdown/codeSpanClose.ts": {
+      "reason": "The 5 loops count every step: readBacktickRuns walks each backtick run once per scan (two loops), linkLongerRuns pushes and pops each run once (two loops, 2 per run), and settledRun follows one run's longer-run path once per run end and opener length, reused by every position of that run (osionos#240).",
+      "counts": {
+        "indexOf": 0,
+        "lastIndexOf": 0,
+        "includes": 0,
+        "search": 0,
+        "match": 0,
+        "matchAll": 0,
+        "exec": 0,
+        "test": 0,
+        "replace": 0,
+        "split": 0,
+        "slice": 0,
+        "substring": 0,
+        "loop": 5
       }
     },
     "markdown/htmlSubset/allowlist.ts": {

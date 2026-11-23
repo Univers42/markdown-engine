@@ -28,6 +28,7 @@ import {
 } from "./inlineScanMemo";
 import { splitQuotedTitle } from "./blockLineMatchers";
 import { findMatchingTaggedClose } from "./taggedSpanClose";
+import { backtickRunEnd, findCodeSpanClose } from "./codeSpanClose";
 import { hostnameFromUrl } from "./urlSugar";
 import { normalizeInlineLinkHref } from "../inlineLinks";
 import { normalizeInlineColorToken } from "../inlineColorTokens";
@@ -803,18 +804,10 @@ export function createInlineDispatch(
     }),
     defineMatcher(["`"], (text, pos) => {
       if (text[pos] !== "`") return null;
-      let ticks = 0;
-      let i = pos;
-      while (i < text.length && text[i] === "`") {
-        ticks++;
-        i++;
-      }
-      countSteps(ticks);
-      const closePattern = ticks === 1 ? "`" : "`".repeat(ticks);
-      const closeIdx = countedIndexOf(text, closePattern, i);
+      const i = backtickRunEnd(text, pos);
+      const ticks = i - pos;
+      const closeIdx = findCodeSpanClose(text, i, ticks);
       if (closeIdx === -1) return null;
-      if (closeIdx + ticks < text.length && text[closeIdx + ticks] === "`")
-        return null;
       let value = text.slice(i, closeIdx);
       if (value.includes("\n")) value = value.replaceAll("\n", " ");
       // CommonMark strips ONE framing space pair (charCode fast path — this

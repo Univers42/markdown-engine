@@ -6,11 +6,12 @@
 // 50 KB time, and a nested colour run was cubic. One frame per parseText call
 // remembers, for that text only, the next occurrence of each closer (a string
 // or a regex), the bracket and parenthesis pairs, the emphasis openers that
-// cannot close and the closes of tagged spans (taggedSpanClose.ts), so each is
-// found once per scan. The frame replaced caches keyed by text content, which paid a
-// full string compare on every lookup once the same text came back as a new
-// string (the editor's next parse): "*a " x 68,267 parsed in 10 ms as the same
-// string object and in 5,797 ms as an equal copy (node 22, 2026-11-18).
+// cannot close, the closes of tagged spans (taggedSpanClose.ts) and the backtick
+// runs of code spans (codeSpanClose.ts), so each is found once per scan. The
+// frame replaced caches keyed by text content, which paid a full string compare
+// on every lookup once the same text came back as a new string (the editor's
+// next parse): "*a " x 68,267 parsed in 10 ms as the same string object and in
+// 5,797 ms as an equal copy (node 22, 2026-11-18).
 //
 // Caveat: the next-closer memo keeps one answer per needle and assumes the
 // positions asked about only grow. Two scans for one needle at once (an outer
@@ -34,6 +35,7 @@ export interface InlineScanFrame {
   parens: Map<number, number> | null;
   parenSteps: number;
   positions: Map<string, Map<number, number>> | null;
+  tables: Map<string, unknown> | null;
 }
 
 let frame: InlineScanFrame | null = null;
@@ -41,7 +43,9 @@ let frame: InlineScanFrame | null = null;
 /** Starts remembering for `text`; pass the result to leaveScan when done. */
 export function enterScan(text: string): InlineScanFrame | null {
   const outer = frame;
-  frame = { text, next: null, unclosable: null, brackets: null, parens: null, parenSteps: 0, positions: null };
+  frame = {
+    text, next: null, unclosable: null, brackets: null, parens: null, parenSteps: 0, positions: null, tables: null,
+  };
   return outer;
 }
 
@@ -179,6 +183,13 @@ export function positionAnswers(text: string, key: string): Map<number, number> 
   const scan = frameFor(text);
   if (!scan) return new Map();
   return entryOf((scan.positions ??= new Map()), key, () => new Map<number, number>());
+}
+
+/** What `build` reads from `text` once per scan (every call, outside a scan). */
+export function scanTable<Table>(text: string, key: string, build: (text: string) => Table): Table {
+  const scan = frameFor(text);
+  if (!scan) return build(text);
+  return entryOf((scan.tables ??= new Map()), key, () => build(text)) as Table;
 }
 
 function entryOf<Entry>(table: Map<string, Entry>, key: string, make: () => Entry): Entry {

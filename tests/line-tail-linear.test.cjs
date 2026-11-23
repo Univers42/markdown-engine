@@ -144,9 +144,8 @@ const LONG_LINES = {
   detect_quoted_heading_ws_cr: [detectBlockType, (size) => `> #${" ".repeat(size)}a\rb`],
   detect_compact_toggle_ws_cr: [detectBlockType, (size) => `#>${" ".repeat(size)}a\rb`],
   source_heading_ws_ls: [renderSource, (size) => `#${" ".repeat(size)}a\u2028b`],
-  // Tildes, not backticks: a rejected backtick run falls through to renderInline,
-  // whose per-token rescans are quadratic on their own (a separate defect).
-  source_fence_run_ls: [renderSource, (size) => `~~~${"~".repeat(size)}a\u2028b`],
+  source_fence_tildes_ls: [renderSource, (size) => `~~~${"~".repeat(size)}a\u2028b`],
+  source_fence_backticks_ls: [renderSource, (size) => `\`\`\`${"`".repeat(size)}a\u2028b`],
   source_quote_run_ls: [renderSource, (size) => `${">".repeat(size)}a\u2028b`],
   source_bullet_ws_ls: [renderSource, (size) => `-${" ".repeat(size)}a\u2028b`],
   source_ordered_ws_ls: [renderSource, (size) => `1)${" ".repeat(size)}a\u2028b`],

@@ -16,6 +16,7 @@ import {
   matchListMarker,
   matchQuoteMarker,
 } from "../markdown/blockLineMatchers";
+import { inlineTokens } from "./source-inline-tokens";
 import { escapeHtml } from "./utils";
 import {
   resolveIndexedMarkdownMode,
@@ -146,59 +147,17 @@ function renderInlineToken(
   return esc(token);
 }
 
-const INLINE_TOKEN_PATTERNS: RegExp[] = [
-  /`[^`]*`/,
-  /\*\*[^*]+\*\*/,
-  /\*[^*]+\*/,
-  /~~[^~]+~~/,
-  /!\[[^\]]*\]\([^)]+\)/,
-  /\[[^\]]+\]\([^)]+\)/,
-  /\[[ xX]\]/,
-];
-
-function findNextInlineToken(
-  line: string,
-  fromIndex: number,
-): { index: number; token: string } | null {
-  let bestIndex = Number.POSITIVE_INFINITY;
-  let bestToken = "";
-
-  for (const pattern of INLINE_TOKEN_PATTERNS) {
-    const search = new RegExp(pattern.source, "g");
-    search.lastIndex = fromIndex;
-    const match = search.exec(line);
-    if (!match) continue;
-    if (match.index < bestIndex) {
-      bestIndex = match.index;
-      bestToken = match[0];
-    }
-  }
-
-  if (!Number.isFinite(bestIndex)) return null;
-  return { index: bestIndex, token: bestToken };
-}
-
 function renderInline(
   line: string,
   decorator: MarkdownSymbolDecorator,
 ): string {
   let out = "";
   let cursor = 0;
-
-  while (cursor < line.length) {
-    const match = findNextInlineToken(line, cursor);
-    if (!match) {
-      out += esc(line.slice(cursor));
-      break;
-    }
-    if (match.index > cursor) {
-      out += esc(line.slice(cursor, match.index));
-    }
-    out += renderInlineToken(match.token, decorator);
-    cursor = match.index + match.token.length;
+  for (const { index, token } of inlineTokens(line)) {
+    out += esc(line.slice(cursor, index)) + renderInlineToken(token, decorator);
+    cursor = index + token.length;
   }
-
-  return out;
+  return out + esc(line.slice(cursor));
 }
 
 function renderLine(line: string, decorator: MarkdownSymbolDecorator): string {

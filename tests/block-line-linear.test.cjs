@@ -12,6 +12,7 @@ const { loadMarkengine } = require("./support/loadMarkengine.cjs");
 const pins = require("./fixtures/block-line-pins.json");
 
 const { createRandom } = require("./support/seededRandom.cjs");
+const { assertLinearGrowth } = require("./support/linearity.cjs");
 
 const { parse } = loadMarkengine("index.ts");
 const matchers = loadMarkengine("markdown/blockLineMatchers.ts");
@@ -90,33 +91,16 @@ test("block line matchers: agree with the old regexes on 2 KiB lines", () => {
   }
 });
 
-// Caveat: a wall-clock bound, so a heavily loaded machine can exceed it (false
-// failure) and it says nothing about inputs other than these three shapes. Margin,
-// measured 2026-11-23 in node:22: the linear parse takes 0.12-0.29 ms at 64 KiB, the
-// regexes took 2,030-3,240 ms, so the 50 ms bound sits ~170x above the one and ~40x
-// below the other. The best of three runs drops a one-off GC or scheduling pause.
-const KIB64 = 64 * 1024;
-const BOUND_MS = 50;
+// One long whitespace run per shape, the run where each regex backtracked; the
+// growth bound and what it gets wrong are in support/linearity.cjs.
 const LONG_LINES = {
-  heading_ws: `# a${" ".repeat(KIB64)}x`,
-  heading_ws_cr: `# a${" ".repeat(KIB64)}\rx`,
-  table_sep_ws: `a|b\n---${" ".repeat(KIB64)}x`,
+  heading_ws: (size) => `# a${" ".repeat(size)}x`,
+  heading_ws_cr: (size) => `# a${" ".repeat(size)}\rx`,
+  table_sep_ws: (size) => `a|b\n---${" ".repeat(size)}x`,
 };
 
-function bestParseMs(markdown) {
-  let best = Infinity;
-  for (let run = 0; run < 3; run++) {
-    const started = performance.now();
-    parse(markdown);
-    best = Math.min(best, performance.now() - started);
-  }
-  return best;
-}
-
-for (const [shape, markdown] of Object.entries(LONG_LINES)) {
-  test(`block line linear: ${shape} at 64 KiB parses under ${BOUND_MS} ms`, () => {
-    parse("# warm\n\na|b\n-|-\n");
-    const ms = bestParseMs(markdown);
-    assert.ok(ms < BOUND_MS, `${shape}: ${ms.toFixed(1)} ms, bound ${BOUND_MS} ms`);
+for (const [shape, inputOfSize] of Object.entries(LONG_LINES)) {
+  test(`block line linear: ${shape} parse time grows linearly to 64 KiB`, () => {
+    assertLinearGrowth(shape, parse, inputOfSize);
   });
 }

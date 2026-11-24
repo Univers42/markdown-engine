@@ -40,6 +40,11 @@ const SHAPES = {
   'backtick run closing a shorter one, "`" x 2n/3 + "a" + "`" x n/3': (length) =>
     repeatTo(Math.ceil((length * 2) / 3), "`") + "a" + repeatTo(length - Math.ceil((length * 2) / 3) - 1, "`"),
   'shrinking backtick runs, "`" x k + "a" for k = m..1': (length) => shrinkingRuns(length),
+  // osionos#240 S1-9: a bare URL that runs to the end of the text is dropped, and each
+  // later "http"/"www" in it read the same run again.
+  'bare URLs to the end, "http://;" x n then "x"': (length) => repeatTo(length, "http://;", "x"),
+  'bare www to the end, "www.;" x n then "x"': (length) => repeatTo(length, "www.;", "x"),
+  'bare URLs in a link label, "[" + "http://;" x n + "x](y)"': (length) => "[" + repeatTo(length - 1, "http://;", "x](y)"),
 };
 
 // Runs of m, m-1, ..., 1 backticks: each opener's closer search reads every

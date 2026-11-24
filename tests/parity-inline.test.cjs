@@ -62,6 +62,14 @@ test("bare www. url autolinks with a hostname label and https href", () => {
   assert.equal(link.children[0].value, "www.linkedin.com");
 });
 
+test("a bare url autolinks only once something follows it, trailing punctuation included", () => {
+  const hrefs = (text) => E.parseInline(text).filter((node) => node.type === "link").map((node) => node.href);
+  assert.deepEqual(hrefs("see www.example.com"), []);
+  assert.deepEqual(hrefs("see www.example.com."), ["https://www.example.com"]);
+  assert.deepEqual(hrefs("http://a;http://b"), []);
+  assert.deepEqual(hrefs("http://a;http://b y"), ["http://a;http://b"]);
+});
+
 test("a plain (parenthetical) with no trailing [url] stays text", () => {
   const nodes = E.parseInline("(just parens)");
   assert.ok(!nodes.some((node) => node.type === "link"));

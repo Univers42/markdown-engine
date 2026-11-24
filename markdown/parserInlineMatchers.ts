@@ -48,6 +48,9 @@ export const BARE_WWW_RE = /^www\.[^\s<>()[\]]+[^\s<>()[\].,;:!?'"]/i;
 // `text.slice(pos)` allocation the anchored forms would force on every h/w char.
 const BARE_URL_STICKY = /https?:\/\/[^\s<>()[\]]+[^\s<>()[\].,;:!?'"]/y;
 const BARE_WWW_STICKY = /www\.[^\s<>()[\]]+[^\s<>()[\].,;:!?'"]/iy;
+// Where a bare URL's run of characters stops, and the characters it never ends on.
+const BARE_URL_STOP = /[\s<>()[\]]/g;
+const BARE_URL_TRAILING = /[.,;:!?'"]/;
 const EMOJI_STICKY = /:([a-zA-Z0-9_+-]+):/y;
 // A name, then `| filter args` segments. Each segment opens on a literal `|` and its
 // body can't hold one, so the match is linear (no nested-quantifier backtracking).
@@ -103,14 +106,24 @@ function matchBareUrl(text: string, pos: number): InlineMatchResult | null {
       return null;
     }
   }
+  // Autolink only once the URL is followed by something (space/punctuation/text),
+  // i.e. "on space" — a URL still at the caret's end stays plain text so typing it
+  // isn't disrupted by an early collapse to the hostname label. A URL ends at the last
+  // character of its run that is not trailing punctuation, so it reaches the end of the
+  // text exactly when its run does and the last character is not trailing punctuation.
+  // Asked before matching, with the run's stop memoised per scan, that answers every
+  // later "http"/"www" in the run at once; matching first read the run again from each
+  // of them (osionos#240 S1-9: quadratic, 171 ms for "www.;" x n at 64 KiB).
+  if (
+    nextMatchIndex(text, BARE_URL_STOP, pos) === -1 &&
+    !BARE_URL_TRAILING.test(text[text.length - 1])
+  ) {
+    return null;
+  }
   const match =
     execSticky(BARE_URL_STICKY, text, pos) ?? execSticky(BARE_WWW_STICKY, text, pos);
   if (!match) return null;
   const raw = match[0];
-  // Autolink only once the URL is followed by something (space/punctuation/text),
-  // i.e. "on space" — a URL still at the caret's end stays plain text so typing it
-  // isn't disrupted by an early collapse to the hostname label.
-  if (pos + raw.length >= text.length) return null;
   // Scheme-less `www.` hosts resolve to https so the anchor label + href agree.
   const href = normalizeInlineLinkHref(raw);
   return {
